@@ -198,6 +198,66 @@ def main():
                  "electricity only (ambient heat not yet counted)."),
     }
 
+    # --- weekly useful heat & cool delivered (dual-bar basis) ------------------
+    # Conversion factors, sourced/flagged:
+    #  gas boiler in-situ 0.835 (RAP/field trials 82.5-85%); oil 0.82 (est.,
+    #  older stock); bio 0.70 (est., stoves/boilers range 60-80%); solid 0.55
+    #  (est.); heat networks 1.0 (ECUK 'heat' is delivered heat; upstream
+    #  losses excluded); resistive electric 1.0.
+    #  Heat pumps: domestic HP electricity 2.0 TWh/yr (ECUK 2025, 169 ktoe,
+    #  2024; non-domestic HP excluded - understates). Blended SPF 2.8
+    #  (Energy Systems Catapult EoH median ASHP 2.80; GSHP 3.24).
+    #  Cooling: EER 3.0 (assumption) on the CDD-shaped half; ventilation
+    #  counted at 1.0 (fan energy delivers a service, not multiplied).
+    EFF = {"gas": 0.835, "oil": 0.82, "bio": 0.70, "solid": 0.55,
+           "heat_networks": 1.0, "resistive": 1.0}
+    HP_ELEC_TWH = 2.0
+    HP_SPF = 2.8
+    COOL_EER = 3.0
+
+    HP_FLAT_SHARE = 0.15   # HP hot-water runs year-round (assumption)
+    hp_elec_wk = HP_ELEC_TWH * g * 1000.0 * (
+        (1 - HP_FLAT_SHARE) * f_h + HP_FLAT_SHARE * f_flat)
+    hp_elec_wk = min(hp_elec_wk, mix["elec_heat"])       # cannot exceed segment
+    resistive_wk = mix["elec_heat"] - hp_elec_wk
+    hp_heat_wk = hp_elec_wk * HP_SPF
+    hp_ambient_wk = hp_heat_wk - hp_elec_wk
+
+    cool_flat = A["cooling_vent"] * 0.5 * f_flat          # ventilation, flat
+    cool_shaped = A["cooling_vent"] * 0.5 * f_c           # true cooling
+    cool_useful = cool_flat * 1.0 + cool_shaped * COOL_EER
+
+    useful = {
+        "gas_space": round(mix["gas_space"] * EFF["gas"], 0),
+        "gas_dhw": round(mix["gas_dhw"] * EFF["gas"], 0),
+        "oil": round(mix["oil"] * EFF["oil"], 0),
+        "bio_other": round(mix["bio_other"] * EFF["bio"], 0),
+        "solid": round(mix["solid"] * EFF["solid"], 0),
+        "heat_networks": round(mix["heat_networks"] * EFF["heat_networks"], 0),
+        "elec_resistive": round(resistive_wk, 0),
+        "hp_electricity": round(hp_elec_wk, 0),
+        "hp_ambient": round(hp_ambient_wk, 0),
+        "cooling_delivered": round(cool_useful, 0),
+    }
+    weekly_useful = {
+        "components_GWh": useful,
+        "total_GWh": round(sum(useful.values()), 0),
+        "wasted_GWh": round(
+            (mix["gas_space"] + mix["gas_dhw"]) * (1 - EFF["gas"])
+            + mix["oil"] * (1 - EFF["oil"])
+            + mix["bio_other"] * (1 - EFF["bio"])
+            + mix["solid"] * (1 - EFF["solid"]), 0),
+        "factors": {"boiler_gas": EFF["gas"], "oil": EFF["oil"],
+                    "bio": EFF["bio"], "solid": EFF["solid"],
+                    "hp_spf": HP_SPF, "hp_elec_TWh_yr": HP_ELEC_TWH,
+                    "cool_eer": COOL_EER},
+        "note": ("Useful basis: combustion derated by in-situ efficiencies; "
+                 "heat pumps multiplied by SPF with ambient harvest shown "
+                 "separately; cooling multiplied by EER on the weather-driven "
+                 "half. Heat-network upstream losses excluded. Non-domestic "
+                 "heat pumps not yet counted (understates ambient heat)."),
+    }
+
     # winter context for summer visitors
     peak_i = max(range(len(space_heat) - 6),
                  key=lambda i: sum(space_heat[i:i + 7]))
@@ -211,6 +271,7 @@ def main():
         "calibration": calibration,
         "weekly": weekly,
         "weekly_mix": weekly_mix,
+        "weekly_useful": weekly_useful,
         "peak_week": peak_week,
         "series": {
             "dates": common,
@@ -236,6 +297,9 @@ def main():
     print("weekly_mix:", weekly_mix["components_GWh"],
           "total", weekly_mix["total_GWh"],
           "combustion", weekly_mix["combustion_share"])
+    print("weekly_useful:", weekly_useful["components_GWh"],
+          "total", weekly_useful["total_GWh"],
+          "wasted", weekly_useful["wasted_GWh"])
     print("peak week:", peak_week)
     _write(out)
 
