@@ -1,16 +1,8 @@
-"""Build data.json: fetch feeds, run the gas->heat regression, write output.
+"""Build data.json: fetch feeds, regress LDZ (buildings) gas on HDD, write.
 
-Method (Watson/Sansom-style): OLS of daily NTS gas demand on HDD across a
-trailing 365-day window, per candidate base temperature; the best-R2 base is
-selected. The HDD-driven component is space heating; the intercept is the
-non-weather baseline (water heating, cooking, industrial, power-station gas).
-
-Calibration: the running 12-month space-heat total is compared against the
-ECUK-derived annual anchor; the ratio is reported (and flagged) but NOT yet
-applied automatically - Phase 1 go/no-go requires it within +/-10%.
-
-Fallback: on any feed failure the previous data.json values are retained and
-that source is marked "stale".
+Regression target: summed LDZ offtake (excludes power stations).
+NTS total retained for context. DHW sits in the flat baseline; see site
+methodology panel for known biases.
 """
 
 import datetime as dt
@@ -26,13 +18,9 @@ from fetch_gas import fetch_gas_demand                       # noqa: E402
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "docs", "data.json")
 WINDOW_DAYS = 365
 
-# --- ECUK anchor (UPDATE each September on ECUK release) ---------------------
-# ECUK 2025 (2024 data), end-use tables: GB domestic + services gas used for
-# space + water heating. PLACEHOLDER pending exact Table U3 extraction -
-# order of magnitude ~300 TWh. Status flag forces the caveat onto the site
-# until a sourced value is entered.
+# PLACEHOLDER: replace with sourced ECUK space-heating-only gas figure (GB).
 ECUK_ANNUAL_GAS_HEAT_TWH = 300.0
-ECUK_ANCHOR_STATUS = "placeholder - replace with sourced ECUK Table U3 value"
+ECUK_ANCHOR_STATUS = "placeholder - replace with sourced ECUK space-heating value"
 
 
 def ols(x, y):
@@ -58,12 +46,9 @@ def load_previous():
 
 def main():
     prev = load_previous()
-    out = {
-        "updated": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
-        "sources": {},
-    }
+    out = {"updated": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+           "sources": {}}
 
-    # --- degree days ---------------------------------------------------------
     try:
         dd = fetch_degree_days(days=WINDOW_DAYS + 40)
         out["sources"]["degree_days"] = {"status": "ok",
@@ -78,37 +63,36 @@ def main():
             _write(out | {"error": "no degree-day data available"})
             return
 
-    # --- gas -----------------------------------------------------------------
     try:
         gas = fetch_gas_demand(days=WINDOW_DAYS + 40)
-        nts = gas["nts_demand_actual"]
-        vals = sorted(nts.values())
-        print(f"gas diagnostics: {len(nts)} days, {min(nts)} to {max(nts)}, "
-              f"min {vals[0]} max {vals[-1]} GWh, {len(set(vals))} distinct values")
+        target = gas["ldz_sum"]
+        vals = sorted(target.values())
+        print(f"gas diagnostics (LDZ sum): {len(target)} days, "
+              f"{min(target)} to {max(target)}, min {vals[0]} max {vals[-1]} GWh")
         out["sources"]["gas"] = {"status": "ok",
-                                 "last_good": max(nts) if nts else None,
-                                 "publications": gas["_meta"]}
+                                 "last_good": max(target) if target else None,
+                                 "meta": gas["_meta"]}
     except Exception:
         traceback.print_exc()
         gas = prev.get("_gas")
         out["sources"]["gas"] = {
             "status": "stale",
             "last_good": prev.get("sources", {}).get("gas", {}).get("last_good")}
-        if not gas:
+        if not gas or "ldz_sum" not in gas:
             _write(out | {"error": "no gas data available"})
             return
-        nts = gas["nts_demand_actual"]
+        target = gas["ldz_sum"]
 
-    # --- align series --------------------------------------------------------
+    nts = gas.get("nts_demand_actual", {})
+
     dd_idx = {d: i for i, d in enumerate(dd["dates"])}
-    common = sorted(set(nts) & set(dd_idx))[-WINDOW_DAYS:]
+    common = sorted(set(target) & set(dd_idx))[-WINDOW_DAYS:]
     if len(common) < 90:
         _write(out | {"error": f"only {len(common)} overlapping days"})
         return
 
-    y = [nts[d] for d in common]
+    y = [target[d] for d in common]
 
-    # --- regression, best base ----------------------------------------------
     best = None
     for base in HDD_BASES:
         x = [dd["hdd"][str(base)][dd_idx[d]] for d in common]
@@ -116,13 +100,12 @@ def main():
         if best is None or r2 > best["r2"]:
             best = {"base_temp": base, "slope_GWh_per_HDD": round(slope, 1),
                     "intercept_GWh": round(intercept, 1), "r2": round(r2, 3),
-                    "window_days": len(common)}
+                    "window_days": len(common), "target": "LDZ sum (buildings)"}
     base = str(best["base_temp"])
     hdd_series = [dd["hdd"][base][dd_idx[d]] for d in common]
     space_heat = [round(max(0.0, best["slope_GWh_per_HDD"] * h), 1)
                   for h in hdd_series]
 
-    # --- calibration check (12-month space-heat vs ECUK anchor) --------------
     annual_space_twh = sum(space_heat) / 1000.0
     ratio = annual_space_twh / ECUK_ANNUAL_GAS_HEAT_TWH
     calibration = {
@@ -133,7 +116,6 @@ def main():
         "within_10pct": abs(ratio - 1.0) <= 0.10,
     }
 
-    # --- weekly headline ------------------------------------------------------
     wk = common[-7:]
     wk_i = [common.index(d) for d in wk]
     weekly = {
@@ -145,26 +127,39 @@ def main():
     weekly["gas_baseline_GWh"] = round(
         weekly["gas_total_GWh"] - weekly["gas_space_heat_GWh"], 0)
 
+    # winter context for summer visitors
+    peak_i = max(range(len(space_heat) - 6),
+                 key=lambda i: sum(space_heat[i:i + 7]))
+    peak_week = {
+        "week_ending": common[peak_i + 6],
+        "space_heat_GWh": round(sum(space_heat[peak_i:peak_i + 7]), 0),
+    }
+
     out.update({
         "regression": best,
         "calibration": calibration,
         "weekly": weekly,
+        "peak_week": peak_week,
         "series": {
             "dates": common,
             "gas_GWh": [round(v, 1) for v in y],
+            "nts_GWh": [nts.get(d) for d in common],
             "hdd": hdd_series,
             "space_heat_GWh": space_heat,
         },
         "ni_note": {
             "hdd_15_5_latest": dd["ni"]["hdd_15_5"][-1] if dd["ni"]["hdd_15_5"] else None,
-            "note": ("NI is not on the GB NTS feed. NI heating is estimated "
-                     "annually from subnational consumption statistics, "
-                     "scaled by NI degree days."),
+            "note": ("NI is not on the GB NTS/LDZ feed. NI heating is "
+                     "estimated annually from subnational consumption "
+                     "statistics, scaled by NI degree days."),
         },
-        # raw caches for stale-fallback on next run
         "_dd": dd,
-        "_gas": {k: v for k, v in gas.items()},
+        "_gas": gas,
     })
+
+    print("regression:", best, "| weekly:", weekly,
+          "| calibration ratio:", calibration["ratio"],
+          "| peak week:", peak_week)
     _write(out)
 
 
@@ -172,8 +167,6 @@ def _write(out):
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         json.dump(out, f, separators=(",", ":"))
-    if "regression" in out:
-        print("regression:", out["regression"], "| weekly:", out["weekly"], "| calibration ratio:", out["calibration"]["ratio"])
     print(f"wrote {OUT_PATH}")
     if "error" in out:
         print("ERROR:", out["error"])
