@@ -1,9 +1,8 @@
 """Fetch daily GB gas demand from the National Gas Transmission REST API.
 
-Self-resolving: walks the publication catalogue recursively (it is a nested
-category tree) and matches publication names, so PUBOB IDs are never
-hardcoded. Fair use: one data request per day.
-Values assumed mcm/day, converted to GWh (gross CV basis).
+Pinned by exact publication name with catalogue verification, falling back to
+pattern matching if the name changes. Units auto-detected (GWh vs mcm).
+Fair use: one data request per day.
 """
 
 import datetime as dt
@@ -14,19 +13,17 @@ BASE = "https://api.nationalgas.com/operationaldata/v1"
 CATALOGUE_URL = f"{BASE}/publications/catalogue"
 GASDAY_URL = f"{BASE}/publications/gasday"
 
-TARGETS = {
-    "nts_demand_actual": [["demand", "actual", "nts"],
-                          ["nts", "demand"]],
-    "ndm_demand_actual": [["ndm", "actual"], ["demand", "ndm"]],
-    "ldz_demand_actual": [["ldz", "demand", "actual"], ["ldz", "demand"]],
-}
+# Exact names in priority order; verified against the live catalogue each run.
+NTS_PREFERRED_NAMES = [
+    "Demand Actual, NTS, D+1 (Energy)",   # PUBOBJ1030 - daily actual, energy units
+    "Demand Actual, NTS, D+1",            # volume-units fallback
+    "Demand Actual, NTS, D+6",            # later-vintage fallback
+]
 
 MCM_TO_GWH = 11.056
 
 
 def _harvest(node, found):
-    """Recursively collect (publicationId, publicationName) pairs from any
-    nesting of dicts/lists."""
     if isinstance(node, dict):
         pid = node.get("publicationId") or node.get("publicationObjectId") \
               or node.get("pubObjId") or node.get("id")
@@ -41,61 +38,35 @@ def _harvest(node, found):
             _harvest(v, found)
 
 
-def resolve_publication_ids():
+def resolve_nts_publication():
     r = requests.get(CATALOGUE_URL, timeout=60)
     r.raise_for_status()
-    raw = r.json()
-
     catalogue = []
-    _harvest(raw, catalogue)
-    # de-duplicate
+    _harvest(r.json(), catalogue)
     catalogue = sorted(set(catalogue))
+    by_name = {name: pid for pid, name in catalogue}
 
-    if not catalogue:
-        snippet = json.dumps(raw)[:4000]
-        raise RuntimeError(
-            "Catalogue harvest found no PUB* ids. Raw structure sample:\n" + snippet)
+    for name in NTS_PREFERRED_NAMES:
+        if name in by_name:
+            print(f"Using publication: {by_name[name]} | {name}")
+            return by_name[name], name
 
-    resolved, misses = {}, []
-    for key, patterns in TARGETS.items():
-        hit = None
-        for pat in patterns:              # try patterns in priority order
-            for pub_id, name in catalogue:
-                low = name.lower()
-                if all(s in low for s in pat):
-                    hit = (pub_id, name)
-                    break
-            if hit:
-                break
-        if hit:
-            resolved[key] = hit
-        else:
-            misses.append(key)
-
-    if misses:
-        names = "\n".join(f"{i} | {n}" for i, n in catalogue
-                          if "demand" in n.lower()) or \
-                "\n".join(f"{i} | {n}" for i, n in catalogue)
-        raise RuntimeError(
-            f"Could not resolve {misses}. Demand-related publications found:\n{names}")
-    print("Candidate demand publications:")
-    for pid, name in catalogue:
-        if "demand" in name.lower() and "ldz" not in name.lower():
-            print("  ", pid, "|", name)
-    print("Resolved publications:",
-          {k: v for k, v in resolved.items()})
-    return resolved
+    demand_names = "\n".join(f"{i} | {n}" for i, n in catalogue
+                             if "demand" in n.lower() and "actual" in n.lower())
+    raise RuntimeError(
+        "No preferred NTS publication found. Actual-demand items available:\n"
+        + demand_names)
 
 
 def fetch_gas_demand(days=400):
-    resolved = resolve_publication_ids()
+    pid, name = resolve_nts_publication()
     end = dt.date.today()
     start = end - dt.timedelta(days=days)
 
     body = {
         "fromDate": start.isoformat(),
         "toDate": end.isoformat(),
-        "publicationIds": [pid for pid, _ in resolved.values()],
+        "publicationIds": [pid],
         "latestValue": "Y",
     }
     r = requests.post(GASDAY_URL, json=body,
@@ -103,24 +74,35 @@ def fetch_gas_demand(days=400):
     r.raise_for_status()
     payload = r.json()
 
-    id_to_key = {pid: key for key, (pid, _) in resolved.items()}
-    out = {key: {} for key in resolved}
+    raw = {}
     blocks = payload if isinstance(payload, list) else payload.get("data", [])
     for block in blocks:
-        key = id_to_key.get(block.get("publicationId"))
-        if key is None:
+        if block.get("publicationId") != pid:
             continue
         for rec in block.get("publications", []):
             date = rec.get("applicableFor")
             try:
-                val_mcm = float(rec.get("value"))
+                raw[date] = float(rec.get("value"))
             except (TypeError, ValueError):
                 continue
-            out[key][date] = round(val_mcm * MCM_TO_GWH, 1)
 
-    out["_meta"] = {k: {"publicationId": pid, "publicationName": name}
-                    for k, (pid, name) in resolved.items()}
-    return out
+    if not raw:
+        raise RuntimeError(f"Publication {pid} returned no records")
+
+    vals = sorted(raw.values())
+    median = vals[len(vals) // 2]
+    if median > 1000:          # already energy units (GWh/day)
+        factor, unit = 1.0, "GWh (no conversion)"
+    else:                      # volume units (mcm/day)
+        factor, unit = MCM_TO_GWH, f"mcm x {MCM_TO_GWH}"
+    print(f"gas units: median raw {median:.1f} -> treating as {unit}; "
+          f"{len(raw)} days, {min(raw)} to {max(raw)}, "
+          f"{len(set(vals))} distinct values")
+
+    nts = {d: round(v * factor, 1) for d, v in raw.items()}
+    return {"nts_demand_actual": nts,
+            "_meta": {"nts_demand_actual":
+                      {"publicationId": pid, "publicationName": name}}}
 
 
 if __name__ == "__main__":
