@@ -78,7 +78,10 @@ def resolve_publication_ids():
                 "\n".join(f"{i} | {n}" for i, n in catalogue)
         raise RuntimeError(
             f"Could not resolve {misses}. Demand-related publications found:\n{names}")
-
+    print("Candidate demand publications:")
+    for pid, name in catalogue:
+        if "demand" in name.lower() and "ldz" not in name.lower():
+            print("  ", pid, "|", name)
     print("Resolved publications:",
           {k: v for k, v in resolved.items()})
     return resolved
