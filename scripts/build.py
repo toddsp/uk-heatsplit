@@ -82,6 +82,9 @@ def main():
     try:
         gas = fetch_gas_demand(days=WINDOW_DAYS + 40)
         nts = gas["nts_demand_actual"]
+        vals = sorted(nts.values())
+        print(f"gas diagnostics: {len(nts)} days, {min(nts)} to {max(nts)}, "
+              f"min {vals[0]} max {vals[-1]} GWh, {len(set(vals))} distinct values")
         out["sources"]["gas"] = {"status": "ok",
                                  "last_good": max(nts) if nts else None,
                                  "publications": gas["_meta"]}
