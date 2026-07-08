@@ -26,14 +26,13 @@ GB_POINTS = [
 NI_POINT = ("Belfast", 54.60, -5.93)
 
 HDD_BASES = [14.5, 15.5, 16.5]
-CDD_BASE = 22.0
+CDD_BASES = [18.0, 22.0]   # 18.0 used for UK cooling shape; 22.0 retained
 
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
 
 def _fetch_all(start, end, retries=4):
-    """One batched request for all GB points + Belfast.
-    Returns a list of per-location daily dicts in input order."""
+    """One batched request for all GB points + Belfast."""
     pts = GB_POINTS + [(NI_POINT[0], NI_POINT[1], NI_POINT[2], 0.0)]
     params = {
         "latitude": ",".join(str(p[1]) for p in pts),
@@ -76,12 +75,15 @@ def fetch_degree_days(days=400):
 
     out = {"dates": dates,
            "gb_mean_temp": [round(gb_mean[d], 2) for d in dates],
-           "hdd": {}, "cdd": [],
+           "hdd": {}, "cdd": {},
            "ni": {"dates": [], "mean_temp": [], "hdd_15_5": []}}
 
     for base in HDD_BASES:
-        out["hdd"][str(base)] = [round(max(0.0, base - gb_mean[d]), 2) for d in dates]
-    out["cdd"] = [round(max(0.0, gb_mean[d] - CDD_BASE), 2) for d in dates]
+        out["hdd"][str(base)] = [round(max(0.0, base - gb_mean[d]), 2)
+                                 for d in dates]
+    for base in CDD_BASES:
+        out["cdd"][str(base)] = [round(max(0.0, gb_mean[d] - base), 2)
+                                 for d in dates]
 
     ni = results[-1]["daily"]
     for date, t in zip(ni["time"], ni["temperature_2m_mean"]):
@@ -97,4 +99,5 @@ def fetch_degree_days(days=400):
 if __name__ == "__main__":
     dd = fetch_degree_days(days=30)
     print(f"{len(dd['dates'])} GB days, latest {dd['dates'][-1]}, "
-          f"HDD15.5 latest = {dd['hdd']['15.5'][-1]}")
+          f"HDD15.5 latest = {dd['hdd']['15.5'][-1]}, "
+          f"CDD18 latest = {dd['cdd']['18.0'][-1]}")
