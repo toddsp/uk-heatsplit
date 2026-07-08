@@ -1,11 +1,9 @@
 """Fetch daily GB gas demand from the National Gas Transmission REST API.
 
-Self-resolving: queries the publication catalogue at runtime and matches
-publication names, so PUBOB IDs are never hardcoded (they may change during
-the SOAP->REST transition, H1 2026).
-
-Fair use: one data request per day; <= 2 MB / ~3,600 records per request.
-Values are assumed to be mcm/day and converted to GWh (gross CV basis).
+Self-resolving: walks the publication catalogue recursively (it is a nested
+category tree) and matches publication names, so PUBOB IDs are never
+hardcoded. Fair use: one data request per day.
+Values assumed mcm/day, converted to GWh (gross CV basis).
 """
 
 import datetime as dt
@@ -16,38 +14,58 @@ BASE = "https://api.nationalgas.com/operationaldata/v1"
 CATALOGUE_URL = f"{BASE}/publications/catalogue"
 GASDAY_URL = f"{BASE}/publications/gasday"
 
-# Name patterns (case-insensitive substring sets) -> our internal keys.
-# All substrings in a set must appear in the publication name.
 TARGETS = {
-    "nts_demand_actual": [["demand", "actual", "nts"]],
-    "ndm_demand_actual": [["ndm", "actual"], ["demand", "actual", "ndm"]],
-    "ldz_demand_actual": [["ldz", "demand", "actual"]],
+    "nts_demand_actual": [["demand", "actual", "nts"],
+                          ["nts", "demand"]],
+    "ndm_demand_actual": [["ndm", "actual"], ["demand", "ndm"]],
+    "ldz_demand_actual": [["ldz", "demand", "actual"], ["ldz", "demand"]],
 }
 
-MCM_TO_GWH = 11.056  # ~39.8 MJ/m3 gross CV (DUKES); revisit against DESNZ annual CV
+MCM_TO_GWH = 11.056
+
+
+def _harvest(node, found):
+    """Recursively collect (publicationId, publicationName) pairs from any
+    nesting of dicts/lists."""
+    if isinstance(node, dict):
+        pid = node.get("publicationId") or node.get("publicationObjectId") \
+              or node.get("pubObjId") or node.get("id")
+        name = node.get("publicationName") or node.get("publicationObjectName") \
+               or node.get("name") or node.get("title")
+        if pid and name and str(pid).upper().startswith("PUB"):
+            found.append((str(pid), str(name)))
+        for v in node.values():
+            _harvest(v, found)
+    elif isinstance(node, list):
+        for v in node:
+            _harvest(v, found)
 
 
 def resolve_publication_ids():
-    """Fetch the catalogue and match names -> {key: (id, name)}.
-    Raises with the full candidate list if a target cannot be matched,
-    so the workflow log shows exactly what names exist."""
     r = requests.get(CATALOGUE_URL, timeout=60)
     r.raise_for_status()
-    items = r.json()
-    # Catalogue shape may be a list or {"publications": [...]} - handle both.
-    if isinstance(items, dict):
-        items = items.get("publications", items.get("data", []))
-    catalogue = [(it.get("publicationId") or it.get("id"),
-                  (it.get("publicationName") or it.get("name") or ""))
-                 for it in items]
+    raw = r.json()
+
+    catalogue = []
+    _harvest(raw, catalogue)
+    # de-duplicate
+    catalogue = sorted(set(catalogue))
+
+    if not catalogue:
+        snippet = json.dumps(raw)[:4000]
+        raise RuntimeError(
+            "Catalogue harvest found no PUB* ids. Raw structure sample:\n" + snippet)
 
     resolved, misses = {}, []
     for key, patterns in TARGETS.items():
         hit = None
-        for pub_id, name in catalogue:
-            low = name.lower()
-            if any(all(s in low for s in pat) for pat in patterns):
-                hit = (pub_id, name)
+        for pat in patterns:              # try patterns in priority order
+            for pub_id, name in catalogue:
+                low = name.lower()
+                if all(s in low for s in pat):
+                    hit = (pub_id, name)
+                    break
+            if hit:
                 break
         if hit:
             resolved[key] = hit
@@ -55,15 +73,18 @@ def resolve_publication_ids():
             misses.append(key)
 
     if misses:
-        names = "\n".join(sorted(n for _, n in catalogue))
+        names = "\n".join(f"{i} | {n}" for i, n in catalogue
+                          if "demand" in n.lower()) or \
+                "\n".join(f"{i} | {n}" for i, n in catalogue)
         raise RuntimeError(
-            f"Could not resolve {misses} in National Gas catalogue. "
-            f"Adjust TARGETS patterns. Available publication names:\n{names}")
+            f"Could not resolve {misses}. Demand-related publications found:\n{names}")
+
+    print("Resolved publications:",
+          {k: v for k, v in resolved.items()})
     return resolved
 
 
 def fetch_gas_demand(days=400):
-    """Returns {key: {date: value_GWh}} for each resolved series."""
     resolved = resolve_publication_ids()
     end = dt.date.today()
     start = end - dt.timedelta(days=days)
@@ -100,8 +121,4 @@ def fetch_gas_demand(days=400):
 
 
 if __name__ == "__main__":
-    data = fetch_gas_demand(days=14)
-    print(json.dumps(data["_meta"], indent=2))
-    nts = data["nts_demand_actual"]
-    for d in sorted(nts)[-5:]:
-        print(d, nts[d], "GWh")
+    data =
