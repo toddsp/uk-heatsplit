@@ -27,7 +27,7 @@
   .sub{color:var(--muted);margin-top:10px;max-width:60ch}
   .fig{font-family:"IBM Plex Mono";font-size:clamp(30px,6vw,46px);font-weight:500;margin-top:26px}
   .fig small{font-size:.42em;color:var(--muted);font-family:"IBM Plex Sans"}
-  /* signature: the burn bar */
+  .context{font-family:"IBM Plex Mono";font-size:13px;color:var(--geo);margin-top:6px}
   .burnbar{margin:26px 0 6px;height:44px;display:flex;border-radius:4px;overflow:hidden;
            border:1px solid var(--line)}
   .burnbar .seg{transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
@@ -58,11 +58,12 @@
 <div class="wrap">
   <div class="hero">
     <h1>Most of Britain's heat still comes from <span class="ember">burning gas</span>.</h1>
-    <p class="sub">A weekly, temperature-driven estimate of GB gas demand split into
-      space heating and everything else — and how much of that burn never becomes
-      useful heat. All figures are model estimates, not measurements.</p>
+    <p class="sub">A weekly, temperature-driven estimate of the gas Britain's buildings
+      burn for space heating — and how much of that burn never becomes useful heat.
+      All figures are model estimates, not measurements.</p>
     <div class="fig" id="wkfig">—<small> GWh of gas burned for space heating this week</small></div>
-    <div class="burnbar" id="burnbar" aria-label="This week's gas split">
+    <div class="context" id="peakctx"></div>
+    <div class="burnbar" id="burnbar" aria-label="This week's buildings gas split">
       <div class="seg space" style="width:0%"></div>
       <div class="seg waste" style="width:0%"></div>
       <div class="seg base"  style="width:0%"></div>
@@ -70,26 +71,33 @@
     <div class="legend">
       <span><span class="key" style="background:var(--ember)"></span><b>Space heating</b> (useful)</span>
       <span><span class="key" style="background:repeating-linear-gradient(135deg,#b83f1e 0 4px,#7e2c15 4px 8px)"></span><b>Wasted at the boiler</b> (~15–17.5%)</span>
-      <span><span class="key" style="background:var(--ash)"></span><b>Non-weather gas</b> (hot water, cooking, industry, power)</span>
+      <span><span class="key" style="background:var(--ash)"></span><b>Non-weather gas to buildings</b> (hot water, cooking, industry on the distribution network)</span>
     </div>
   </div>
 
   <section>
-    <h2>Daily gas demand vs the heating signal</h2>
+    <h2>Daily gas to buildings vs the heating signal</h2>
     <div id="ts"></div>
   </section>
 
   <section class="method">
     <h2>Method &amp; honesty panel</h2>
-    <p><b>How this works.</b> Daily National Transmission System gas demand is regressed
-      against population-weighted GB heating degree days (ERA5 reanalysis via Open-Meteo).
-      The temperature-sensitive component is attributed to space heating; the flat baseline
-      is everything else. The approach follows the published Watson/Sansom method.</p>
-    <p><b>What it is not.</b> No heat is metered here. Figures are estimates with material
-      uncertainty; the boiler-waste band uses in-situ UK boiler efficiency measurements
-      (82.5–85%), not nameplate values.</p>
-    <p><b>Northern Ireland.</b> NI is not on the GB gas network shown here. NI heating is
-      estimated annually from subnational consumption statistics scaled by NI degree days.</p>
+    <p><b>How this works.</b> Daily gas offtake to Britain's local distribution zones
+      (LDZ — the network serving homes and most businesses) is regressed against
+      population-weighted GB heating degree days (ERA5 reanalysis via Open-Meteo).
+      The temperature-sensitive component is attributed to space heating; the flat
+      baseline is hot water, cooking and industrial gas. Directly-connected power
+      stations are excluded, so electricity-sector gas does not contaminate the
+      heating estimate. The approach follows the published Watson/Sansom method.
+      Current model fit: <span id="fit">—</span>.</p>
+    <p><b>Known biases.</b> Hot-water heating is treated as flat but is mildly
+      seasonal (colder mains water in winter), so the space-heating figure carries
+      a small upward bias. No heat is metered here; figures are estimates with
+      material uncertainty. The boiler-waste band uses in-situ UK boiler efficiency
+      measurements (82.5–85%), not nameplate values.</p>
+    <p><b>Northern Ireland.</b> NI is not on the GB network shown here. NI heating
+      is estimated annually from subnational consumption statistics scaled by NI
+      degree days.</p>
     <p><b>Calibration.</b> <span id="calib">—</span></p>
     <div class="status" id="status"></div>
   </section>
@@ -103,6 +111,7 @@
 
 <script>
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = n => Math.round(n).toLocaleString('en-GB');
 fetch('data.json').then(r=>r.json()).then(d=>{
   document.getElementById('stamp').textContent =
     'updated ' + (d.updated||'').slice(0,10) + ' · week ending ' + (d.weekly?.week_ending||'—');
@@ -111,10 +120,15 @@ fetch('data.json').then(r=>r.json()).then(d=>{
     const w=d.weekly, total=w.gas_total_GWh;
     const useful=w.gas_space_heat_GWh*0.835, waste=w.gas_space_heat_GWh*0.165;
     document.getElementById('wkfig').innerHTML =
-      Math.round(w.gas_space_heat_GWh).toLocaleString('en-GB') +
+      fmt(w.gas_space_heat_GWh) +
       '<small> GWh of gas burned for space heating this week</small>';
+    if(d.peak_week){
+      document.getElementById('peakctx').textContent =
+        'For scale: last winter\'s peak week (w/e ' + d.peak_week.week_ending +
+        ') burned ~' + fmt(d.peak_week.space_heat_GWh) + ' GWh for space heating.';
+    }
     const segs=document.querySelectorAll('#burnbar .seg');
-    requestAnimationFrame(()=>{ 
+    requestAnimationFrame(()=>{
       segs[0].style.width=(100*useful/total)+'%';
       segs[1].style.width=(100*waste/total)+'%';
       segs[2].style.width=(100*w.gas_baseline_GWh/total)+'%';
@@ -122,22 +136,34 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   }
 
   if(d.series){
-    Plotly.newPlot('ts',[
-      {x:d.series.dates,y:d.series.gas_GWh,name:'Total gas demand',
+    const traces=[
+      {x:d.series.dates,y:d.series.gas_GWh,name:'Gas to buildings (LDZ)',
        mode:'lines',line:{color:css('--ash'),width:1.5}},
       {x:d.series.dates,y:d.series.space_heat_GWh,name:'Space-heating estimate',
        mode:'lines',fill:'tozeroy',line:{color:css('--ember'),width:2},
        fillcolor:'rgba(228,87,46,.18)'}
-    ],{
+    ];
+    if(d.series.nts_GWh && d.series.nts_GWh.some(v=>v!=null)){
+      traces.unshift({x:d.series.dates,y:d.series.nts_GWh,
+        name:'Total NTS (incl. power stations)',mode:'lines',
+        line:{color:css('--line'),width:1,dash:'dot'}});
+    }
+    Plotly.newPlot('ts',traces,{
       paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
       font:{family:'IBM Plex Sans',color:css('--muted'),size:12},
       margin:{l:52,r:10,t:10,b:40},
       yaxis:{title:'GWh/day',gridcolor:css('--line')},
       xaxis:{gridcolor:css('--line')},
-      legend:{orientation:'h',y:1.12}
+      legend:{orientation:'h',y:1.14}
     },{displayModeBar:false,responsive:true});
   }
 
+  const reg=d.regression;
+  if(reg){
+    document.getElementById('fit').textContent =
+      'R² ' + reg.r2 + ' over ' + reg.window_days + ' days, base ' +
+      reg.base_temp + '°C, sensitivity ' + reg.slope_GWh_per_HDD + ' GWh per degree day';
+  }
   const c=d.calibration;
   if(c){
     document.getElementById('calib').textContent =
