@@ -3,6 +3,11 @@
 Regression target: summed LDZ offtake (excludes power stations).
 NTS total retained for context. DHW sits in the flat baseline; see site
 methodology panel for known biases.
+
+Calibration anchor: ECUK 2025 End Use tables (rev. 20 Apr 2026), calendar
+2024, UK: Table U3 domestic natural gas space heating 189.6 TWh + Table U5
+services natural gas heating 68.5 TWh = 258.1 TWh. Adjusted to GB and
+weather-normalised by the ratio of trailing-12-month HDD to calendar-2024 HDD.
 """
 
 import datetime as dt
@@ -18,9 +23,10 @@ from fetch_gas import fetch_gas_demand                       # noqa: E402
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "docs", "data.json")
 WINDOW_DAYS = 365
 
-# PLACEHOLDER: replace with sourced ECUK space-heating-only gas figure (GB).
-ECUK_ANNUAL_GAS_HEAT_TWH = 300.0
-ECUK_ANCHOR_STATUS = "placeholder - replace with sourced ECUK space-heating value"
+ECUK_UK_GAS_SPACE_HEAT_TWH_2024 = 258.1
+GB_SHARE_OF_UK_GAS_HEAT = 0.985   # NI gas heating excluded from GB LDZ; estimate
+ECUK_ANCHOR_STATUS = ("ECUK 2025 U3+U5, calendar 2024, UK; GB share and "
+                      "weather normalisation applied")
 
 
 def ols(x, y):
@@ -50,7 +56,7 @@ def main():
            "sources": {}}
 
     try:
-        dd = fetch_degree_days(days=WINDOW_DAYS + 40)
+        dd = fetch_degree_days(days=940)  # back to Dec 2023 for 2024 HDD baseline
         out["sources"]["degree_days"] = {"status": "ok",
                                          "last_good": dd["dates"][-1]}
     except Exception:
@@ -107,10 +113,20 @@ def main():
                   for h in hdd_series]
 
     annual_space_twh = sum(space_heat) / 1000.0
-    ratio = annual_space_twh / ECUK_ANNUAL_GAS_HEAT_TWH
+    hdd_all = dd["hdd"][base]
+    hdd_2024 = sum(h for d_, h in zip(dd["dates"], hdd_all)
+                   if d_.startswith("2024"))
+    hdd_12m = sum(hdd_series)
+    anchor_gb = ECUK_UK_GAS_SPACE_HEAT_TWH_2024 * GB_SHARE_OF_UK_GAS_HEAT
+    anchor_scaled = anchor_gb * (hdd_12m / hdd_2024) if hdd_2024 else anchor_gb
+    ratio = annual_space_twh / anchor_scaled
     calibration = {
         "model_12m_gas_space_heat_TWh": round(annual_space_twh, 1),
-        "ecuk_anchor_TWh": ECUK_ANNUAL_GAS_HEAT_TWH,
+        "ecuk_anchor_TWh": round(anchor_scaled, 1),
+        "anchor_raw_UK_2024_TWh": ECUK_UK_GAS_SPACE_HEAT_TWH_2024,
+        "gb_share": GB_SHARE_OF_UK_GAS_HEAT,
+        "hdd_2024": round(hdd_2024, 1),
+        "hdd_trailing_12m": round(hdd_12m, 1),
         "anchor_status": ECUK_ANCHOR_STATUS,
         "ratio": round(ratio, 3),
         "within_10pct": abs(ratio - 1.0) <= 0.10,
@@ -158,8 +174,7 @@ def main():
     })
 
     print("regression:", best, "| weekly:", weekly,
-          "| calibration ratio:", calibration["ratio"],
-          "| peak week:", peak_week)
+          "| calibration:", calibration, "| peak week:", peak_week)
     _write(out)
 
 
