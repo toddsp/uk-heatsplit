@@ -1,100 +1,110 @@
-"""Fetch daily mean temperatures from Open-Meteo (ERA5-derived) and compute
-population-weighted GB heating/cooling degree days, plus a separate NI series.
+"""Fetch daily GB gas demand from the National Gas Transmission REST API.
 
-Single batched request for all locations, with retries. No API key.
-Attribution: Open-Meteo.com (CC BY 4.0) / ERA5 (Copernicus).
+Pinned by exact publication name with catalogue verification, falling back to
+pattern matching if the name changes. Units auto-detected (GWh vs mcm).
+Fair use: one data request per day.
 """
 
 import datetime as dt
-import time
+import json
 import requests
 
-GB_POINTS = [
-    ("London",      51.51,  -0.13, 24.0),
-    ("Birmingham",  52.48,  -1.90, 10.0),
-    ("Manchester",  53.48,  -2.24, 10.0),
-    ("Leeds",       53.80,  -1.55,  7.0),
-    ("Glasgow",     55.86,  -4.25,  6.0),
-    ("Newcastle",   54.98,  -1.61,  4.0),
-    ("Bristol",     51.45,  -2.59,  4.0),
-    ("Cardiff",     51.48,  -3.18,  3.5),
-    ("Edinburgh",   55.95,  -3.19,  3.5),
-    ("Southampton", 50.90,  -1.40,  4.0),
-    ("Nottingham",  52.95,  -1.15,  4.0),
-    ("Sheffield",   53.38,  -1.47,  4.0),
+BASE = "https://api.nationalgas.com/operationaldata/v1"
+CATALOGUE_URL = f"{BASE}/publications/catalogue"
+GASDAY_URL = f"{BASE}/publications/gasday"
+
+# Exact names in priority order; verified against the live catalogue each run.
+NTS_PREFERRED_NAMES = [
+    "Demand Actual, NTS, D+1 (Energy)",   # PUBOBJ1030 - daily actual, energy units
+    "Demand Actual, NTS, D+1",            # volume-units fallback
+    "Demand Actual, NTS, D+6",            # later-vintage fallback
 ]
-NI_POINT = ("Belfast", 54.60, -5.93)
 
-HDD_BASES = [14.5, 15.5, 16.5]
-CDD_BASE = 22.0
-
-ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+MCM_TO_GWH = 11.056
 
 
-def _fetch_all(start, end, retries=4):
-    """One batched request for all GB points + Belfast.
-    Returns a list of per-location daily dicts in input order."""
-    pts = GB_POINTS + [(NI_POINT[0], NI_POINT[1], NI_POINT[2], 0.0)]
-    params = {
-        "latitude": ",".join(str(p[1]) for p in pts),
-        "longitude": ",".join(str(p[2]) for p in pts),
-        "start_date": start.isoformat(), "end_date": end.isoformat(),
-        "daily": "temperature_2m_mean", "timezone": "UTC",
-    }
-    last_err = None
-    for attempt in range(retries):
-        try:
-            r = requests.get(ARCHIVE_URL, params=params, timeout=120)
-            r.raise_for_status()
-            data = r.json()
-            return data if isinstance(data, list) else [data]
-        except Exception as e:
-            last_err = e
-            wait = 15 * (attempt + 1)
-            print(f"open-meteo attempt {attempt+1} failed ({e}); retry in {wait}s")
-            time.sleep(wait)
-    raise last_err
+def _harvest(node, found):
+    if isinstance(node, dict):
+        pid = node.get("publicationId") or node.get("publicationObjectId") \
+              or node.get("pubObjId") or node.get("id")
+        name = node.get("publicationName") or node.get("publicationObjectName") \
+               or node.get("name") or node.get("title")
+        if pid and name and str(pid).upper().startswith("PUB"):
+            found.append((str(pid), str(name)))
+        for v in node.values():
+            _harvest(v, found)
+    elif isinstance(node, list):
+        for v in node:
+            _harvest(v, found)
 
 
-def fetch_degree_days(days=400):
-    end = dt.date.today() - dt.timedelta(days=1)
+def resolve_nts_publication():
+    r = requests.get(CATALOGUE_URL, timeout=60)
+    r.raise_for_status()
+    catalogue = []
+    _harvest(r.json(), catalogue)
+    catalogue = sorted(set(catalogue))
+    by_name = {name: pid for pid, name in catalogue}
+
+    for name in NTS_PREFERRED_NAMES:
+        if name in by_name:
+            print(f"Using publication: {by_name[name]} | {name}")
+            return by_name[name], name
+
+    demand_names = "\n".join(f"{i} | {n}" for i, n in catalogue
+                             if "demand" in n.lower() and "actual" in n.lower())
+    raise RuntimeError(
+        "No preferred NTS publication found. Actual-demand items available:\n"
+        + demand_names)
+
+
+def fetch_gas_demand(days=400):
+    pid, name = resolve_nts_publication()
+    end = dt.date.today()
     start = end - dt.timedelta(days=days)
-    results = _fetch_all(start, end)
 
-    total_w = sum(p[3] for p in GB_POINTS)
-    series, counts = {}, {}
-    for (name, lat, lon, w), res in zip(GB_POINTS, results):
-        d = res["daily"]
-        for date, t in zip(d["time"], d["temperature_2m_mean"]):
-            if t is None:
-                continue
-            series[date] = series.get(date, 0.0) + t * w
-            counts[date] = counts.get(date, 0.0) + w
+    body = {
+        "fromDate": start.isoformat(),
+        "toDate": end.isoformat(),
+        "publicationIds": [pid],
+        "latestValue": "Y",
+    }
+    r = requests.post(GASDAY_URL, json=body,
+                      headers={"Content-Type": "application/json"}, timeout=120)
+    r.raise_for_status()
+    payload = r.json()
 
-    dates = sorted(d for d in series if counts[d] >= 0.9 * total_w)
-    gb_mean = {d: series[d] / counts[d] for d in dates}
-
-    out = {"dates": dates,
-           "gb_mean_temp": [round(gb_mean[d], 2) for d in dates],
-           "hdd": {}, "cdd": [],
-           "ni": {"dates": [], "mean_temp": [], "hdd_15_5": []}}
-
-    for base in HDD_BASES:
-        out["hdd"][str(base)] = [round(max(0.0, base - gb_mean[d]), 2) for d in dates]
-    out["cdd"] = [round(max(0.0, gb_mean[d] - CDD_BASE), 2) for d in dates]
-
-    ni = results[-1]["daily"]
-    for date, t in zip(ni["time"], ni["temperature_2m_mean"]):
-        if t is None:
+    raw = {}
+    blocks = payload if isinstance(payload, list) else payload.get("data", [])
+    for block in blocks:
+        if block.get("publicationId") != pid:
             continue
-        out["ni"]["dates"].append(date)
-        out["ni"]["mean_temp"].append(round(t, 2))
-        out["ni"]["hdd_15_5"].append(round(max(0.0, 15.5 - t), 2))
+        for rec in block.get("publications", []):
+            date = rec.get("applicableFor")
+            try:
+                raw[date] = float(rec.get("value"))
+            except (TypeError, ValueError):
+                continue
 
-    return out
+    if not raw:
+        raise RuntimeError(f"Publication {pid} returned no records")
+
+    vals = sorted(raw.values())
+    median = vals[len(vals) // 2]
+    if median > 1000:          # already energy units (GWh/day)
+        factor, unit = 1.0, "GWh (no conversion)"
+    else:                      # volume units (mcm/day)
+        factor, unit = MCM_TO_GWH, f"mcm x {MCM_TO_GWH}"
+    print(f"gas units: median raw {median:.1f} -> treating as {unit}; "
+          f"{len(raw)} days, {min(raw)} to {max(raw)}, "
+          f"{len(set(vals))} distinct values")
+
+    nts = {d: round(v * factor, 1) for d, v in raw.items()}
+    return {"nts_demand_actual": nts,
+            "_meta": {"nts_demand_actual":
+                      {"publicationId": pid, "publicationName": name}}}
 
 
 if __name__ == "__main__":
-    dd = fetch_degree_days(days=30)
-    print(f"{len(dd['dates'])} GB days, latest {dd['dates'][-1]}, "
-          f"HDD15.5 latest = {dd['hdd']['15.5'][-1]}")
+    data = fetch_gas_demand(days=14)
+    print(json.dumps(data["_meta"], indent=2))
