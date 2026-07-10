@@ -311,6 +311,80 @@ def main():
         },
     }
 
+    # --- cost layer (4a): household p/kWh useful + national weekly bill --------
+    # Ofgem price cap 1 Jul - 30 Sep 2026, GB direct-debit average, incl VAT
+    # (announced 27 May 2026): electricity 26.11 p/kWh, gas 7.33 p/kWh.
+    # UPDATE QUARTERLY (next: by 26 Aug 2026 for Oct-Dec).
+    # Oil/bio/heat-network/solid unit prices are flagged estimates.
+    PRICES_P_PER_KWH = {
+        "gas": 7.33,            # Ofgem cap Q3 2026
+        "elec": 26.11,          # Ofgem cap Q3 2026
+        "oil": 7.2,             # est. kerosene ~75p/l / 10.35 kWh/l - confirm
+        "bio": 7.5,             # est. wood pellet - confirm
+        "heat_networks": 10.0,  # est. typical network tariff - confirm
+        "solid": 6.0,           # est.
+    }
+    PRICE_TAG = ("Ofgem price cap 1 Jul-30 Sep 2026 (GB DD avg, incl VAT); "
+                 "oil/bio/network/solid prices are flagged estimates")
+
+    GSHP_SPF = 3.24   # Energy Systems Catapult in-situ GSHP average
+    ASHP_SPF = 2.80   # ESC Electrification of Heat median
+    PASSIVE_COOL_COP = 20.0  # illustrative mid-range of 15-30
+
+    p = PRICES_P_PER_KWH
+    household = [
+        {"route": "Gas boiler", "p_per_useful_kwh":
+            round(p["gas"] / EFF["gas"], 1),
+         "basis": "cap gas rate / 0.835 in-situ efficiency"},
+        {"route": "Oil boiler", "p_per_useful_kwh":
+            round(p["oil"] / EFF["oil"], 1),
+         "basis": "est. kerosene / 0.82 (estimate)"},
+        {"route": "Resistive electric", "p_per_useful_kwh":
+            round(p["elec"], 1),
+         "basis": "cap electricity rate, COP 1"},
+        {"route": "Air-source heat pump", "p_per_useful_kwh":
+            round(p["elec"] / ASHP_SPF, 1),
+         "basis": "cap electricity / SPF 2.80 (ESC field data)"},
+        {"route": "Ground-source / geothermal", "p_per_useful_kwh":
+            round(p["elec"] / GSHP_SPF, 1),
+         "basis": "cap electricity / SPF 3.24 (ESC field data)"},
+        {"route": "Passive ground cooling", "p_per_useful_kwh":
+            round(p["elec"] / PASSIVE_COOL_COP, 1),
+         "basis": "cap electricity / COP ~20 (circulation only)"},
+    ]
+
+    # national weekly bill: energy-in mix x unit prices (domestic cap as
+    # proxy for all sectors - flagged simplification). GWh x p/kWh = £10k.
+    def _cost_m(gwh, price):
+        return gwh * price / 100.0  # GWh * p/kWh -> £m
+
+    bill = {
+        "gas": round(_cost_m(mix["gas_space"] + mix["gas_dhw"], p["gas"]), 0),
+        "oil": round(_cost_m(mix["oil"], p["oil"]), 0),
+        "electric_heat": round(_cost_m(mix["elec_heat"], p["elec"]), 0),
+        "bio_other": round(_cost_m(mix["bio_other"], p["bio"]), 0),
+        "heat_networks": round(_cost_m(mix["heat_networks"],
+                                       p["heat_networks"]), 0),
+        "solid": round(_cost_m(mix["solid"], p["solid"]), 0),
+        "cooling": round(_cost_m(mix["cooling"], p["elec"]), 0),
+    }
+    cost = {
+        "price_tag": PRICE_TAG,
+        "household_p_per_useful_kwh": household,
+        "gshp_vs_gas_boiler": {
+            "gshp": round(p["elec"] / GSHP_SPF, 1),
+            "gas_boiler": round(p["gas"] / EFF["gas"], 1),
+            "gshp_cheaper": (p["elec"] / GSHP_SPF) < (p["gas"] / EFF["gas"]),
+        },
+        "national_week_Mgbp": bill,
+        "national_week_total_Mgbp": round(sum(bill.values()), 0),
+        "note": ("Running cost only: no capex, grants, or standing charges. "
+                 "Domestic cap rates used as proxy for all sectors. "
+                 "The electricity/gas price ratio embeds policy levies on "
+                 "electricity; rebalancing would shift these comparisons "
+                 "further toward heat pumps."),
+    }
+
     # winter context for summer visitors
     peak_i = max(range(len(space_heat) - 6),
                  key=lambda i: sum(space_heat[i:i + 7]))
@@ -326,6 +400,7 @@ def main():
         "weekly_mix": weekly_mix,
         "weekly_useful": weekly_useful,
         "geothermal": geothermal,
+        "cost": cost,
         "peak_week": peak_week,
         "series": {
             "dates": common,
@@ -355,6 +430,7 @@ def main():
           "total", weekly_useful["total_GWh"],
           "wasted", weekly_useful["wasted_GWh"])
     print("geothermal:", geothermal)
+    print("cost:", {k: cost[k] for k in ("gshp_vs_gas_boiler","national_week_total_Mgbp")})
     print("peak week:", peak_week)
     _write(out)
 
