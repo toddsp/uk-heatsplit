@@ -26,7 +26,16 @@
   h1{font-family:Archivo;font-weight:800;font-size:clamp(26px,5vw,40px);line-height:1.12}
   h1 .ember{color:var(--ember)} h1 .cool{color:var(--cool)}
   .sub{color:var(--muted);margin-top:10px;max-width:62ch}
-  .fig{font-family:"IBM Plex Mono";font-size:clamp(30px,6vw,46px);font-weight:500;margin-top:26px}
+  .statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
+  @media (max-width:640px){.statrow{grid-template-columns:1fr}}
+  .stat .fig{font-family:"IBM Plex Mono";font-size:clamp(24px,4vw,38px);font-weight:500}
+  .stat .cap{font-size:13px;color:var(--muted);margin-top:2px;max-width:26ch}
+  .whatifrow{border:1px solid var(--geo);border-radius:6px;padding:14px 18px;margin-top:18px;
+             background:linear-gradient(180deg,rgba(31,163,150,.07),rgba(31,163,150,.02))}
+  .whatifrow .wtitle{font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.06em;color:var(--geo);margin-bottom:8px}
+  .whatifrow .statrow{margin-top:0}
+  .whatifrow .fig{color:var(--geo)}
+  .fig{font-family:"IBM Plex Mono";font-weight:500}
   .fig small{font-size:.42em;color:var(--muted);font-family:"IBM Plex Sans"}
   .context{font-family:"IBM Plex Mono";font-size:13px;color:var(--geo);margin-top:6px}
   .barlabel{font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.06em;
@@ -92,8 +101,26 @@
       cooling, by source — and how much still comes from combustion. Gas space heating
       is estimated live from grid data; other sources are official annual figures
       shaped by this week's weather. Estimates, not measurements.</p>
-    <div class="fig" id="wkfig">—<small> GWh of heating &amp; cooling energy this week</small></div>
-    <div class="context" id="peakctx"></div>
+    <div class="statrow">
+      <div class="stat"><div class="fig" id="st_energy">—</div>
+        <div class="cap">GWh of heating &amp; cooling energy purchased this week</div></div>
+      <div class="stat"><div class="fig" id="st_indig">—</div>
+        <div class="cap">estimated UK-indigenous share of that energy</div></div>
+      <div class="stat"><div class="fig" id="st_bill">—</div>
+        <div class="cap" id="st_bill_cap">national energy bill this week</div></div>
+    </div>
+    <div class="whatifrow">
+      <div class="wtitle">WHAT IF 20% OF HEAT &amp; COOLING MOVED TO GEOTHERMAL NETWORKS?</div>
+      <div class="statrow">
+        <div class="stat"><div class="fig" id="wf_energy">—</div>
+          <div class="cap">GWh purchased — the ground supplies the rest free</div></div>
+        <div class="stat"><div class="fig" id="wf_indig">—</div>
+          <div class="cap">UK-indigenous share</div></div>
+        <div class="stat"><div class="fig" id="wf_bill">—</div>
+          <div class="cap">national bill</div></div>
+      </div>
+    </div>
+    <div class="context" id="peakctx" style="margin-top:14px"></div>
     <div class="barlabel">ENERGY IN — fuel &amp; electricity purchased</div>
     <div class="mixbar" id="mixbar" aria-label="This week's heat and cooling mix — energy in"></div>
     <div class="barlabel">USEFUL HEAT &amp; COOL OUT — after boiler losses, heat-pump harvest and cooling delivery</div>
@@ -183,6 +210,7 @@
     <p><b>Northern Ireland.</b> NI is not on the GB network shown here. NI heating
       is estimated annually from subnational consumption statistics scaled by NI
       degree days.</p>
+    <p><b>Indigenous share &amp; 20% what-if.</b> <span id="indignote">—</span></p>
     <p><b>Calibration.</b> <span id="calib">—</span></p>
     <div class="status" id="status"></div>
   </section>
@@ -242,8 +270,27 @@ fetch('data.json').then(r=>r.json()).then(d=>{
     const totalOut = u ? (u.total_GWh || 1) : 0;
     const scale = Math.max(totalIn, totalOut);   // same scale, honest lengths
 
-    document.getElementById('wkfig').innerHTML =
-      fmt(totalIn) + '<small> GWh of heating &amp; cooling energy purchased this week</small>';
+    document.getElementById('st_energy').textContent = fmt(totalIn);
+    const hh = d.headlines;
+    if(hh && hh.indigenous_pct != null){
+      document.getElementById('st_indig').textContent = hh.indigenous_pct + '%';
+    }
+    if(d.cost && d.cost.national_week_total_Mgbp != null){
+      document.getElementById('st_bill').textContent =
+        '£' + fmt(d.cost.national_week_total_Mgbp) + 'm';
+      if(d.cost.national_week_heat_Mgbp != null){
+        document.getElementById('st_bill_cap').textContent =
+          'national bill this week (heat £' + fmt(d.cost.national_week_heat_Mgbp) +
+          'm · cooling £' + fmt(d.cost.national_week_cool_Mgbp) + 'm)';
+      }
+    }
+    if(hh && hh.whatif_20pct_geothermal){
+      const w = hh.whatif_20pct_geothermal;
+      document.getElementById('wf_energy').textContent = fmt(w.purchased_GWh);
+      document.getElementById('wf_indig').textContent =
+        (w.indigenous_pct != null ? w.indigenous_pct + '%' : '—');
+      document.getElementById('wf_bill').textContent = '£' + fmt(w.bill_Mgbp) + 'm';
+    }
 
     const seen = {};
     function renderBar(el, def, comp, wasted){
@@ -413,6 +460,9 @@ fetch('data.json').then(r=>r.json()).then(d=>{
     });
   }
 
+  if(d.headlines && d.headlines.indig_note){
+    document.getElementById('indignote').textContent = d.headlines.indig_note;
+  }
   const reg=d.regression;
   if(reg){
     document.getElementById('fit').textContent =
