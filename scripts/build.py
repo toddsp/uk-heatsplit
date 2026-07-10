@@ -510,9 +510,9 @@ def main():
     # --- Northern Ireland summary ----------------------------------------------
     # NI is on separate gas (mutual networks, no GB LDZ) and electricity (SEM)
     # systems - the live GB feeds above do not cover it.
-    NI_ANNUAL_HEAT_TWH = 14.0   # est. NI buildings heat; ~62% of homes
-                                # oil-heated - flagged estimates, refine from
-                                # NISRA/subnational statistics
+    NI_ANNUAL_HEAT_TWH = 14.0   # Causeway estimate - refine from DfE
+                                # 'Energy in Northern Ireland'
+                                # Oil share sourced: NISRA CHS 2024/25
     ni_hdd = dd["ni"]["hdd_15_5"]
     ni_wk_hdd = round(sum(ni_hdd[-7:]), 1) if len(ni_hdd) >= 7 else None
     ni_12m = sum(ni_hdd[-365:]) if len(ni_hdd) >= 300 else None
@@ -522,7 +522,8 @@ def main():
         "week_hdd": ni_wk_hdd,
         "week_heat_GWh_est": round(ni_week_heat, 0),
         "annual_TWh_est": NI_ANNUAL_HEAT_TWH,
-        "oil_share_note": "~62% of NI homes heat with oil (est.)",
+        "oil_share_note": ("just over 60% of NI homes heat with oil, "
+                           "gas 36% and rising (NISRA CHS 2024/25)"),
         "why_separate": ("NI runs on separate gas and electricity systems "
                          "(no GB LDZ, SEM market), so the live GB feeds "
                          "on this page do not cover it - NI is estimated "
