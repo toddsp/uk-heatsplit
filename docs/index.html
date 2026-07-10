@@ -20,7 +20,15 @@
   .wrap{max-width:880px;margin:0 auto;padding:0 20px}
   header{border-bottom:1px solid var(--line);padding:18px 0}
   header .wrap{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-  .brand{font-family:Archivo;font-weight:800;letter-spacing:.02em}
+  .brandbox{display:flex;align-items:center;gap:14px}
+  .logo img{height:30px;display:block}
+  .logo{text-decoration:none}
+  .wordmark{font-family:Archivo;font-weight:800;font-size:15px;color:var(--geo);letter-spacing:.04em}
+  .wordmark em{font-style:normal;color:var(--paper);font-weight:500;margin-left:5px}
+  .brand{font-family:Archivo;font-weight:800;letter-spacing:.02em;border-left:1px solid var(--line);padding-left:14px}
+  .tickbox{text-align:right}
+  .ticker{font-family:"IBM Plex Mono";font-size:12.5px;margin-bottom:2px}
+  .ticker b{color:var(--geo)} .ticker .neg{color:var(--ember)}
   .stamp{font-family:"IBM Plex Mono";font-size:12px;color:var(--muted)}
   .hero{padding:44px 0 8px}
   h1{font-family:Archivo;font-weight:800;font-size:clamp(26px,5vw,40px);line-height:1.12}
@@ -90,8 +98,19 @@
 </head>
 <body>
 <header><div class="wrap">
-  <div class="brand">UK HEAT SPLIT</div>
-  <div class="stamp" id="stamp">loading…</div>
+  <div class="brandbox">
+    <a class="logo" href="https://causewaygt.com" target="_blank" rel="noopener"
+       aria-label="Causeway Energies">
+      <img src="causeway-logo.png" alt="Causeway Energies"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
+      <span class="wordmark" style="display:none">CAUSEWAY<em>ENERGIES</em></span>
+    </a>
+    <div class="brand">UK HEAT SPLIT</div>
+  </div>
+  <div class="tickbox">
+    <div class="ticker" id="ticker"></div>
+    <div class="stamp" id="stamp">loading…</div>
+  </div>
 </div></header>
 
 <div class="wrap">
@@ -168,6 +187,11 @@
         its source. Forecast bars are heat only — no published UK geothermal
         cooling forecast exists to cite.</p>
     </div>
+  </section>
+
+  <section>
+    <h2>Northern Ireland</h2>
+    <p class="costnote" id="nipanel">—</p>
   </section>
 
   <section class="method">
@@ -460,6 +484,25 @@ fetch('data.json').then(r=>r.json()).then(d=>{
     });
   }
 
+  const sp = d.spark;
+  if(sp && sp.gap_gbp_mwh != null){
+    const cheaper = sp.gap_gbp_mwh > 0;
+    document.getElementById('ticker').innerHTML =
+      'Heat spark gap (' + sp.date + '): gas-boiler heat £' +
+      sp.gas_boiler_heat_gbp_mwh + '/MWh vs geothermal £' +
+      sp.gshp_heat_gbp_mwh + '/MWh — ' +
+      (cheaper ? '<b>ground wins by £' + sp.gap_gbp_mwh + '</b>'
+               : '<span class="neg">gas ahead by £' + Math.abs(sp.gap_gbp_mwh) + '</span>');
+    document.getElementById('ticker').title = sp.basis;
+  }
+  const ni = d.ni_panel;
+  if(ni){
+    document.getElementById('nipanel').textContent =
+      'This week in NI (estimate): ' + fmt(ni.week_heat_GWh_est) +
+      ' GWh of building heat (' + ni.week_hdd + ' heating degree days); ~' +
+      ni.annual_TWh_est + ' TWh/yr, ' + ni.oil_share_note + '. ' +
+      ni.why_separate;
+  }
   if(d.headlines && d.headlines.indig_note){
     document.getElementById('indignote').textContent = d.headlines.indig_note;
   }
