@@ -210,7 +210,7 @@ const MIX_DEF = [
   ["cooling",       "Cooling & ventilation","--cool"],
 ];
 
-fetch('data.json?v=' + Date.now()).then(r=>r.json()).then(d=>{
+fetch('data.json').then(r=>r.json()).then(d=>{
   document.getElementById('stamp').textContent =
     'updated ' + (d.updated||'').slice(0,10) + ' · week ending ' + (d.weekly?.week_ending||'—');
 
