@@ -258,6 +258,53 @@ def main():
                  "heat pumps not yet counted (understates ambient heat)."),
     }
 
+    # --- geothermal & ground-source panel --------------------------------------
+    # All values TWh/yr useful heat, GB. Sources tagged; forecasts are
+    # third-party pathways or explicitly-flagged Causeway derivations.
+    GEO = {
+        "today_gshp_TWh": 2.0,      # est. range 1.5-2.5: GSHP stock ~50k units
+                                    # (MCS cumulative + legacy) x typical output;
+                                    # consistent with ECUK 2025 HP electricity
+        "today_deep_TWh": 0.05,     # Southampton + Gateshead (6 MW) + Eden etc,
+                                    # capacity-derived estimates
+        "f2027_TWh": 2.5,           # 12-month trend: MCS 2025 installs +34% on
+                                    # 2024 record 58,176; GSHP ~2-3% share
+        "f2031_TWh": 4.5,           # scenario: CCC 7th Carbon Budget pathway
+                                    # (450k HP/yr by 2030) x assumed GSHP share
+                                    # rising to ~5% + deep pipeline; range 3.5-6
+        "f2050_TWh": 40.0,          # Project InnerSpace / REA / ARUP (Feb 2026):
+                                    # 15 GWth ambition ~= ~40 TWh/yr heat
+    }
+    geo_today = GEO["today_gshp_TWh"] + GEO["today_deep_TWh"]
+    geo_week = geo_today * g * 1000.0 * (0.85 * f_h + 0.15 * f_flat)
+    heat_week_total = (mix["gas_space"] + mix["gas_dhw"] + mix["oil"]
+                       + mix["elec_heat"] + mix["bio_other"]
+                       + mix["heat_networks"] + mix["solid"])
+    geothermal = {
+        "week_GWh": round(geo_week, 0),
+        "week_share_of_heat": round(geo_week / heat_week_total, 4)
+                              if heat_week_total else None,
+        "annual_TWh": {
+            "today": geo_today,
+            "today_deep_only": GEO["today_deep_TWh"],
+            "forecast_2027": GEO["f2027_TWh"],
+            "forecast_2031": GEO["f2031_TWh"],
+            "ambition_2050": GEO["f2050_TWh"],
+        },
+        "tags": {
+            "today": "Estimate: ~50k GSHPs + named deep/mine schemes "
+                     "(Southampton, Gateshead 6 MW, Eden); ECUK 2025 / "
+                     "DUKES 2025 basis",
+            "forecast_2027": "Trend: MCS installs 2025 +34% on 2024 record "
+                             "(58,176); GSHP ~2-3% of installs",
+            "forecast_2031": "Scenario: CCC Seventh Carbon Budget pathway "
+                             "(450k HP/yr by 2030) x rising GSHP share + "
+                             "deep pipeline - Causeway derivation, range 3.5-6",
+            "ambition_2050": "Project InnerSpace / REA / ARUP, Feb 2026: "
+                             "15 GWth by 2050",
+        },
+    }
+
     # winter context for summer visitors
     peak_i = max(range(len(space_heat) - 6),
                  key=lambda i: sum(space_heat[i:i + 7]))
@@ -272,6 +319,7 @@ def main():
         "weekly": weekly,
         "weekly_mix": weekly_mix,
         "weekly_useful": weekly_useful,
+        "geothermal": geothermal,
         "peak_week": peak_week,
         "series": {
             "dates": common,
@@ -300,6 +348,7 @@ def main():
     print("weekly_useful:", weekly_useful["components_GWh"],
           "total", weekly_useful["total_GWh"],
           "wasted", weekly_useful["wasted_GWh"])
+    print("geothermal:", geothermal)
     print("peak week:", peak_week)
     _write(out)
 
