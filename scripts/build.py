@@ -24,6 +24,7 @@ from fetch_prices import fetch_gas_sap, fetch_elec_mid        # noqa: E402
 
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "docs", "data.json")
 WINDOW_DAYS = 365
+EST = " \u2020"   # marks a Causeway estimate - see site footnote
 COOL_BASE = "18.0"
 
 ECUK_UK_GAS_SPACE_HEAT_TWH_2024 = 258.1
@@ -196,7 +197,7 @@ def main():
                  "components are ECUK 2024 annual levels shaped by HDD/CDD. "
                  "Cooling & ventilation split 50% flat / 50% CDD-shaped "
                  "(assumption). Electric heating includes heat pump input "
-                 "electricity only (ambient heat not yet counted)."),
+                 "electricity only (ambient heat not yet counted)." + EST),
     }
 
     # --- weekly useful heat & cool delivered (dual-bar basis) ------------------
@@ -256,7 +257,7 @@ def main():
                  "heat pumps multiplied by SPF with ambient harvest shown "
                  "separately; cooling multiplied by EER on the weather-driven "
                  "half. Heat-network upstream losses excluded. Non-domestic "
-                 "heat pumps not yet counted (understates ambient heat)."),
+                 "heat pumps not yet counted (understates ambient heat)." + EST),
     }
 
     # --- geothermal & ground-source panel --------------------------------------
@@ -301,12 +302,12 @@ def main():
         "tags": {
             "today": "Estimate: ~50k GSHPs + named deep/mine schemes "
                      "(Southampton, Gateshead 6 MW, Eden); ECUK 2025 / "
-                     "DUKES 2025 basis",
+                     "DUKES 2025 basis" + EST,
             "forecast_2027": "Trend: MCS installs 2025 +34% on 2024 record "
                              "(58,176); GSHP ~2-3% of installs",
             "forecast_2031": "Scenario: CCC Seventh Carbon Budget pathway "
                              "(450k HP/yr by 2030) x rising GSHP share + "
-                             "deep pipeline - Causeway derivation, range 3.5-6",
+                             "deep pipeline - Causeway derivation, range 3.5-6" + EST,
             "ambition_2050": "Project InnerSpace / REA / ARUP, Feb 2026: "
                              "15 GWth by 2050",
         },
@@ -326,7 +327,7 @@ def main():
         "solid": 6.0,           # est.
     }
     PRICE_TAG = ("Ofgem price cap 1 Jul-30 Sep 2026 (GB DD avg, incl VAT); "
-                 "oil/bio/network/solid prices are flagged estimates")
+                 "oil/bio/network/solid prices are estimates" + EST)
 
     GSHP_SPF = 3.24   # Energy Systems Catapult in-situ GSHP average
     ASHP_SPF = 2.80   # ESC Electrification of Heat median
@@ -340,7 +341,7 @@ def main():
          "basis": "cap gas rate / 0.835 in-situ efficiency"},
         {"route": "Oil boiler", "p_per_useful_kwh":
             round(p["oil"] / EFF["oil"], 1),
-         "basis": "est. kerosene / 0.82 (estimate)"},
+         "basis": "est. kerosene / 0.82" + EST},
         {"route": "Resistive electric", "p_per_useful_kwh":
             round(p["elec"], 1),
          "basis": "cap electricity rate, COP 1"},
@@ -353,10 +354,10 @@ def main():
         {"route": "Geothermal heat/cool network", "p_per_useful_kwh":
             round(p["elec"] / GEO_NETWORK_SCOP, 1),
          "basis": "cap electricity / SCOP 5.0 (networked ambient loop, "
-                  "shared boreholes/aquifer)"},
+                  "shared boreholes/aquifer)" + EST},
         {"route": "Passive ground cooling", "p_per_useful_kwh":
             round(p["elec"] / PASSIVE_COOL_COP, 1),
-         "basis": "cap electricity / COP ~20 (circulation only)"},
+         "basis": "cap electricity / COP ~20 (circulation only)" + EST},
     ]
 
     # national weekly bill: energy-in mix x unit prices (domestic cap as
@@ -397,7 +398,7 @@ def main():
                         "and cooling delivered via geothermal networks - heat "
                         "at SCOP 5.0, cooling passively at COP ~20, current "
                         "capped electricity price. Running cost only; no "
-                        "capex, network build, or price feedbacks."),
+                        "capex, network build, or price feedbacks." + EST),
     }
 
     cost = {
@@ -479,7 +480,7 @@ def main():
                        "but free, so shifting to geothermal shrinks imports "
                        "twice over. 20% what-if: one-fifth of heat and "
                        "cooling service via geothermal networks (SCOP 5 / "
-                       "passive COP 20), current cap prices, running cost "
+                       "passive COP 20 + EST), current cap prices, running cost "
                        "only."),
     }
 
@@ -522,6 +523,7 @@ def main():
         "week_hdd": ni_wk_hdd,
         "week_heat_GWh_est": round(ni_week_heat, 0),
         "annual_TWh_est": NI_ANNUAL_HEAT_TWH,
+        "est_mark": True,
         "oil_share_note": ("just over 60% of NI homes heat with oil, "
                            "gas 36% and rising (NISRA CHS 2024/25)"),
         "why_separate": ("NI runs on separate gas and electricity systems "
