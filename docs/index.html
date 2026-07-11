@@ -5,38 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UK Heat Split — weekly estimate</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <style>
   :root{
     --ink:#101418; --surface:#1a2129; --line:#2a333d;
     --ember:#e4572e; --gasdhw:#c46a3f; --oil:#9c4a2f; --bio:#7a6a3f;
     --solid:#5d4a3a; --dh:#8b7fa8; --elec:#d9a441; --cool:#4a90c2;
-    --ash:#5c6672; --geo:#1fa396; --paper:#eae6de; --muted:#8b95a0;
+    --ash:#5c6672; --geo:#3aaa35; --paper:#eae6de; --muted:#8b95a0;
   }
   *{box-sizing:border-box;margin:0}
   body{background:var(--ink);color:var(--paper);
-       font:16px/1.55 "IBM Plex Sans",system-ui,sans-serif}
+       font:16px/1.55 "Lato",system-ui,sans-serif}
   .wrap{max-width:880px;margin:0 auto;padding:0 20px}
   header{border-bottom:1px solid var(--line);padding:18px 0}
   header .wrap{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
   .brandbox{display:flex;flex-direction:column;align-items:flex-start;gap:8px;flex:1;min-width:220px}
   .logo img{height:48px;display:block}
   .logo{text-decoration:none}
-  .wordmark{font-family:Archivo;font-weight:800;font-size:22px;color:var(--geo);letter-spacing:.04em}
+  .wordmark{font-family:Lato;font-weight:900;font-size:22px;color:var(--geo);letter-spacing:.04em}
   .wordmark em{font-style:normal;color:var(--paper);font-weight:500;margin-left:7px}
-  .brand{font-family:Archivo;font-weight:800;letter-spacing:.03em;font-size:26px}
+  .brand{font-family:Lato;font-weight:900;letter-spacing:.03em;font-size:26px}
   .tickbox{text-align:right}
   .ticker{font-family:"IBM Plex Mono";font-size:15px;line-height:1.55;
           border:1px solid var(--geo);border-radius:6px;padding:12px 16px;
-          max-width:360px;background:linear-gradient(180deg,rgba(31,163,150,.08),rgba(31,163,150,.02));
+          max-width:360px;background:linear-gradient(180deg,rgba(58,170,53,.08),rgba(58,170,53,.02));
           text-align:left;margin-bottom:4px}
   .ticker b{color:var(--geo);font-size:1.35em}
   .ticker .neg{color:var(--ember);font-size:1.35em}
   @media (max-width:720px){.tickbox{width:100%}.ticker{max-width:none}}
   .stamp{font-family:"IBM Plex Mono";font-size:12px;color:var(--muted)}
   .hero{padding:44px 0 8px}
-  h1{font-family:Archivo;font-weight:800;font-size:clamp(26px,5vw,40px);line-height:1.12}
+  h1{font-family:Lato;font-weight:900;font-size:clamp(26px,5vw,40px);line-height:1.12}
   h1 .ember{color:var(--ember)} h1 .cool{color:var(--cool)}
   .sub{color:var(--muted);margin-top:10px;max-width:62ch}
   .statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
@@ -44,12 +44,12 @@
   .stat .fig{font-family:"IBM Plex Mono";font-size:clamp(24px,4vw,38px);font-weight:500}
   .stat .cap{font-size:13px;color:var(--muted);margin-top:2px;max-width:26ch}
   .whatifrow{border:1px solid var(--geo);border-radius:6px;padding:14px 18px;margin-top:18px;
-             background:linear-gradient(180deg,rgba(31,163,150,.07),rgba(31,163,150,.02))}
+             background:linear-gradient(180deg,rgba(58,170,53,.07),rgba(58,170,53,.02))}
   .whatifrow .wtitle{font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.06em;color:var(--geo);margin-bottom:8px}
   .whatifrow .statrow{margin-top:0}
   .whatifrow .fig{color:var(--geo)}
   .fig{font-family:"IBM Plex Mono";font-weight:500}
-  .fig small{font-size:.42em;color:var(--muted);font-family:"IBM Plex Sans"}
+  .fig small{font-size:.42em;color:var(--muted);font-family:"Lato"}
   .context{font-family:"IBM Plex Mono";font-size:13px;color:var(--geo);margin-top:6px}
   .barlabel{font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.06em;
             color:var(--muted);margin:22px 0 4px}
@@ -67,7 +67,7 @@
   .combline{font-family:"IBM Plex Mono";font-size:13px;color:var(--muted);margin:10px 0 36px}
   .combline b{color:var(--ember)}
   section{border-top:1px solid var(--line);padding:34px 0}
-  h2{font-family:Archivo;font-weight:700;font-size:19px;margin-bottom:14px}
+  h2{font-family:Lato;font-weight:700;font-size:19px;margin-bottom:14px;text-transform:uppercase;letter-spacing:.03em}
   #ts{width:100%;height:340px}
   .burnbar{margin:18px 0 6px;height:36px;display:flex;border-radius:4px;overflow:hidden;
            border:1px solid var(--line)}
@@ -84,17 +84,17 @@
   .billline{font-family:"IBM Plex Mono";font-size:14px;margin:14px 0 4px}
   .billline b{color:var(--paper)}
   .geo{border:1px solid var(--geo);border-radius:6px;padding:22px 22px 18px;margin-top:6px;
-       background:linear-gradient(180deg,rgba(31,163,150,.06),rgba(31,163,150,.015))}
+       background:linear-gradient(180deg,rgba(58,170,53,.06),rgba(58,170,53,.015))}
   .geo h2{color:var(--geo)}
   .geofig{font-family:"IBM Plex Mono";font-size:clamp(24px,4.5vw,34px);color:var(--geo);margin:4px 0 2px}
-  .geofig small{font-size:.45em;color:var(--muted);font-family:"IBM Plex Sans"}
+  .geofig small{font-size:.45em;color:var(--muted);font-family:"Lato"}
   .geosub{color:var(--muted);font-size:14px;max-width:70ch;margin-bottom:18px}
   .geobars{display:flex;flex-direction:column;gap:10px}
   .geobar{display:grid;grid-template-columns:110px 1fr;gap:12px;align-items:center}
   .geobar .lab{font-family:"IBM Plex Mono";font-size:12px;color:var(--paper);text-align:right}
   .geobar .track{height:22px;border:1px solid var(--line);border-radius:3px;overflow:hidden;background:rgba(0,0,0,.15)}
   .geobar .fill{height:100%;width:0%;background:var(--geo);transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
-  .geobar .fill.fc{background:repeating-linear-gradient(135deg,var(--geo) 0 6px,rgba(31,163,150,.35) 6px 12px)}
+  .geobar .fill.fc{background:repeating-linear-gradient(135deg,var(--geo) 0 6px,rgba(58,170,53,.35) 6px 12px)}
   .geotag{font-size:12px;color:var(--muted);grid-column:2}
   .status{display:flex;gap:16px;flex-wrap:wrap;font-family:"IBM Plex Mono";font-size:12px}
   .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
@@ -126,7 +126,7 @@
   <div class="hero">
     <h1>How Britain <span class="ember">heated</span> and <span class="cool">cooled</span> itself this week.</h1>
     <p class="sub">A weekly estimate of the energy behind Britain's building heat and
-      cooling, by source — and how much will be saved when geothermal is adopted. Gas space heating
+      cooling, by source — and how much can be saved when geothermal is adopted. Gas space heating
       is estimated live from grid data; other sources are official annual figures
       shaped by this week's weather. Estimates, not measurements.</p>
     <div class="statrow">
@@ -427,7 +427,7 @@ fetch('data.json').then(r=>r.json()).then(d=>{
     }
     Plotly.newPlot('ts',traces,{
       paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
-      font:{family:'IBM Plex Sans',color:css('--muted'),size:12},
+      font:{family:'Lato',color:css('--muted'),size:12},
       margin:{l:52,r:10,t:10,b:40},
       yaxis:{title:'GWh/day',gridcolor:css('--line')},
       xaxis:{gridcolor:css('--line')},
