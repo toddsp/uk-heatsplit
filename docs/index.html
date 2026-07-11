@@ -126,7 +126,7 @@
   <div class="hero">
     <h1>How Britain <span class="ember">heated</span> and <span class="cool">cooled</span> itself this week.</h1>
     <p class="sub">A weekly estimate of the energy behind Britain's building heat and
-      cooling, by source — and how much still comes from combustion. Gas space heating
+      cooling, by source — and how much will be saved when geothermal is adopted. Gas space heating
       is estimated live from grid data; other sources are official annual figures
       shaped by this week's weather. Estimates, not measurements.</p>
     <div class="statrow">
@@ -140,7 +140,7 @@
     <div class="whatifrow">
       <div class="wtitle" style="display:flex;align-items:center;gap:8px">WHAT IF
         <span style="font-size:2.2em;font-weight:700;color:var(--geo);line-height:1">20%</span>
-        OF HEAT &amp; COOLING MOVED TO GEOTHERMAL NETWORKS?</div>
+        OF HEAT &amp; COOLING MOVED TO GEOTHERMAL?</div>
       <div class="statrow">
         <div class="stat"><div class="fig" id="wf_energy">—</div>
           <div class="cap">GWh purchased — the ground supplies the rest free</div></div>
@@ -190,12 +190,12 @@
   <section>
     <div class="geo">
       <h2>Geothermal &amp; ground source — now and next</h2>
-      <div class="geofig" id="geofig">—<small> GWh of heat from the ground this week (estimate)</small></div>
+      <div class="geofig" id="geofig">—<small> GWh of heat from geothermal this week (estimate)</small></div>
       <p class="geosub" id="geoshare"></p>
       <div class="geobars" id="geobars"></div>
       <div class="billline" id="geowhatif" style="margin-top:18px"></div>
       <p class="geosub" id="geowhatifnote"></p>
-      <p class="geosub" style="margin-top:16px">Heat from the ground is steady,
+      <p class="geosub" style="margin-top:16px">Geothermal heat is steady,
         local, combustion-free — and the same boreholes and aquifers that heat in
         winter cool in summer, rejecting heat to ~12°C ground instead of 30°C
         summer air. Active ground-source cooling beats air-cooled chillers on
@@ -468,14 +468,14 @@ fetch('data.json').then(r=>r.json()).then(d=>{
       fmt(geo.week_GWh) + '<small> GWh heat</small>' +
       ' <span style="color:var(--cool)">· ' + fmt(geo.week_cool_GWh || 0) +
       '<small style="color:var(--muted)"> GWh cool</small></span>' +
-      '<small> — from the ground this week (estimate)</small>';
+      '<small> — from geothermal this week (estimate)</small>';
     if(geo.week_share_of_heat != null){
       let t = 'That is ~' + (100*geo.week_share_of_heat).toFixed(1) +
         '% of Britain\'s building heat this week. Deep and mine-water schemes ' +
         'contribute ~' + geo.annual_TWh.today_deep_only +
         ' TWh/yr of the ' + geo.annual_TWh.today + ' TWh/yr total today.';
       if(geo.week_cool_GWh > 0){
-        t += ' The ground also supplied an estimated ' + fmt(geo.week_cool_GWh) +
+        t += ' Geothermal also supplied an estimated ' + fmt(geo.week_cool_GWh) +
           ' GWh of cooling this week (reversible ground-source systems and ' +
           'aquifer storage, ~' + geo.cool_today_TWh + ' TWh/yr — barely measured, ' +
           'and the clearest growth headroom of all).';
