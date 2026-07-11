@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from fetch_degree_days import fetch_degree_days, HDD_BASES  # noqa: E402
 from fetch_gas import fetch_gas_demand                       # noqa: E402
 from fetch_prices import fetch_gas_sap, fetch_elec_mid        # noqa: E402
+from fetch_carbon import fetch_carbon_intensity               # noqa: E402
 
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "docs", "data.json")
 WINDOW_DAYS = 365
@@ -532,6 +533,79 @@ def main():
                          "from annual statistics shaped by NI degree days."),
     }
 
+    # --- carbon layer -----------------------------------------------------------
+    # Combustion factors: DESNZ GHG conversion factors 2025, gross CV,
+    # gCO2e/kWh fuel: natural gas ~183, kerosene ~247, coal ~345.
+    # Bioenergy combustion counted at 0 (biogenic convention) - supply-chain
+    # emissions excluded and noted. Heat networks assumed gas-fired (†).
+    # Electricity: live GB grid intensity (NESO Carbon Intensity API,
+    # trailing-7-day mean of half-hourly actuals).
+    CF = {"gas": 183.0, "oil": 247.0, "solid": 345.0, "bio": 0.0,
+          "heat_networks": 183.0}
+    carbon = None
+    try:
+        ci = fetch_carbon_intensity(days=7)
+        grid_ci = ci["g_per_kwh"]
+        out["sources"]["carbon"] = {"status": "ok", "last_good": ci["to"]}
+    except Exception:
+        traceback.print_exc()
+        prev_c = prev.get("carbon") or {}
+        grid_ci = prev_c.get("grid_ci_g_per_kwh")
+        out["sources"]["carbon"] = {
+            "status": "stale" if grid_ci else "unavailable",
+            "last_good": prev.get("sources", {}).get("carbon", {}).get("last_good")}
+    if grid_ci:
+        # weekly emissions, tonnes CO2e = GWh x g/kWh
+        em = {
+            "gas": (mix["gas_space"] + mix["gas_dhw"]) * CF["gas"],
+            "oil": mix["oil"] * CF["oil"],
+            "bio_other": mix["bio_other"] * CF["bio"],
+            "solid": mix["solid"] * CF["solid"],
+            "heat_networks": mix["heat_networks"] * CF["heat_networks"],
+            "elec_heat": mix["elec_heat"] * grid_ci,
+            "cooling": mix["cooling"] * grid_ci,
+        }
+        em_heat = sum(v for k, v in em.items() if k != "cooling")
+        em_total = sum(em.values())
+        # what-if: same 20% shift as the cost what-if
+        em_removed = R * (em["gas"] + em["oil"] + em["bio_other"]
+                          + em["solid"] + em["heat_networks"]
+                          + em["elec_heat"] + em["cooling"])
+        em_added = (heat_repl_elec + cool_repl_elec) * grid_ci
+        # per useful kWh, g:
+        routes = [
+            {"route": "Gas boiler", "g_per_useful_kwh":
+                round(CF["gas"] / EFF["gas"], 0)},
+            {"route": "Oil boiler", "g_per_useful_kwh":
+                round(CF["oil"] / EFF["oil"], 0)},
+            {"route": "Resistive electric", "g_per_useful_kwh":
+                round(grid_ci, 0)},
+            {"route": "Air-source heat pump", "g_per_useful_kwh":
+                round(grid_ci / ASHP_SPF, 0)},
+            {"route": "Ground-source / geothermal", "g_per_useful_kwh":
+                round(grid_ci / GSHP_SPF, 0)},
+            {"route": "Geothermal heat/cool network", "g_per_useful_kwh":
+                round(grid_ci / GEO_NETWORK_SCOP, 0)},
+        ]
+        carbon = {
+            "grid_ci_g_per_kwh": grid_ci,
+            "week_kt": round(em_total / 1000.0, 0),
+            "week_heat_kt": round(em_heat / 1000.0, 0),
+            "week_cool_kt": round(em["cooling"] / 1000.0, 0),
+            "whatif_20pct_kt": round((em_total - em_removed + em_added)
+                                     / 1000.0, 0),
+            "whatif_saving_kt": round((em_removed - em_added) / 1000.0, 0),
+            "routes_g_per_useful_kwh": routes,
+            "note": ("Combustion factors: DESNZ GHG conversion factors 2025 "
+                     "(gas ~183, kerosene ~247, coal ~345 gCO2e/kWh). "
+                     "Bioenergy counted at zero combustion emissions "
+                     "(biogenic convention; supply chain excluded). Heat "
+                     "networks assumed gas-fired" + EST + ". Electricity at "
+                     "the live GB grid intensity (NESO Carbon Intensity API, "
+                     "7-day mean) - so the heat-pump rows fall every year "
+                     "the grid decarbonises, while combustion never does."),
+        }
+
     # winter context for summer visitors
     peak_i = max(range(len(space_heat) - 6),
                  key=lambda i: sum(space_heat[i:i + 7]))
@@ -551,6 +625,7 @@ def main():
         "headlines": headlines,
         "spark": spark,
         "ni_panel": ni_panel,
+        "carbon": carbon,
         "peak_week": peak_week,
         "series": {
             "dates": common,
@@ -584,6 +659,7 @@ def main():
     print("headlines:", headlines)
     print("spark:", spark)
     print("ni_panel:", ni_panel)
+    print("carbon:", carbon)
     print("peak week:", peak_week)
     _write(out)
 
