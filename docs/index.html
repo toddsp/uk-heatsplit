@@ -165,16 +165,7 @@
     <div class="combline" id="combline"></div>
   </div>
 
-  <section>
-    <h2>The gas engine room: daily gas to buildings vs the heating signal</h2>
-    <div id="ts"></div>
-    <div class="burnbar" id="burnbar" aria-label="This week's buildings gas split"></div>
-    <div class="legend">
-      <span><span class="key" style="background:var(--ember)"></span><b>Space heating</b> (useful)</span>
-      <span><span class="key" style="background:repeating-linear-gradient(135deg,#b83f1e 0 4px,#7e2c15 4px 8px)"></span><b>Wasted at the boiler</b> (~15–17.5%)</span>
-      <span><span class="key" style="background:var(--ash)"></span><b>Non-weather gas to buildings</b> (hot water, cooking, industry on the distribution network)</span>
-    </div>
-  </section>
+  
 
   <section>
     <h2>What heat costs</h2>
@@ -198,13 +189,6 @@
   </section>
 
   <section>
-    <h2>Cooling: demand vs delivery</h2>
-    <div class="billline" id="coolobsline"></div>
-    <div id="coolcurve" style="width:100%;height:300px"></div>
-    <p class="costnote" id="coolobsnote"></p>
-  </section>
-
-  <section>
     <div class="geo">
       <h2>Geothermal &amp; ground source — now and next</h2>
       <div class="geofig" id="geofig">—<small> GWh of heat from geothermal this week (estimate)</small></div>
@@ -223,6 +207,26 @@
         cooling forecast exists to cite.</p>
     </div>
   </section>
+
+  <section>
+    <h2>The gas engine room: daily gas to buildings vs the heating signal</h2>
+    <div id="ts"></div>
+    <div class="burnbar" id="burnbar" aria-label="This week's buildings gas split"></div>
+    <div class="legend">
+      <span><span class="key" style="background:var(--ember)"></span><b>Space heating</b> (useful)</span>
+      <span><span class="key" style="background:repeating-linear-gradient(135deg,#b83f1e 0 4px,#7e2c15 4px 8px)"></span><b>Wasted at the boiler</b> (~15–17.5%)</span>
+      <span><span class="key" style="background:var(--ash)"></span><b>Non-weather gas to buildings</b> (hot water, cooking, industry on the distribution network)</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cooling: demand vs delivery</h2>
+    <div class="billline" id="coolobsline"></div>
+    <div id="coolcurve" style="width:100%;height:300px"></div>
+    <p class="costnote" id="coolobsnote"></p>
+  </section>
+
+  
 
   <section>
     <h2>Northern Ireland</h2>
@@ -301,7 +305,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '3.1.0';
+const SITE_VERSION = '3.1.1';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
