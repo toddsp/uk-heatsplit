@@ -301,7 +301,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '3.0.0';
+const SITE_VERSION = '3.1.0';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
@@ -521,9 +521,12 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   if(co && co.response_curve_GWh_per_day){
     document.getElementById('coolobsline').innerHTML =
       'This week (observed basis): cooling delivered ~<b>' +
-      fmt(co.week_delivered_GWh) + ' GWh</b> of electricity · latent demand ~' +
-      fmt(co.week_latent_GWh) + ' GWh · unmet ~<b style="color:' +
-      css('--cool') + '">' + fmt(co.week_unmet_GWh) + ' GWh</b>';
+      fmt(co.week_delivered_GWh) + ' GWh</b> of electricity' +
+      (co.latent_slope_reliable
+        ? ' · latent demand ~' + fmt(co.week_latent_GWh) +
+          ' GWh · unmet ~<b style="color:' + css('--cool') + '">' +
+          fmt(co.week_unmet_GWh) + ' GWh</b>'
+        : ' · latent-demand slope not yet reliably identified from this sample');
     const bins = Object.keys(co.response_curve_GWh_per_day).map(Number).sort((a,b)=>a-b);
     const x = bins.map(b => b - 0.5);
     const y = bins.map(b => co.response_curve_GWh_per_day[b]);
@@ -548,6 +551,7 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   } else {
     document.getElementById('coolobsline').textContent =
       'Observed cooling analysis pending sufficient summer data.';
+    document.getElementById('coolcurve').style.display = 'none';
   }
 
   const geo = d.geothermal;
