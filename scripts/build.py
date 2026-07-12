@@ -22,6 +22,7 @@ from fetch_degree_days import fetch_degree_days, HDD_BASES  # noqa: E402
 from fetch_gas import fetch_gas_demand                       # noqa: E402
 from fetch_prices import fetch_gas_sap, fetch_elec_mid        # noqa: E402
 from fetch_carbon import fetch_carbon_intensity               # noqa: E402
+from fetch_electricity import fetch_daily_underlying_demand   # noqa: E402
 
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "docs", "data.json")
 WINDOW_DAYS = 365
@@ -264,22 +265,29 @@ def main():
     # --- geothermal & ground-source panel --------------------------------------
     # All values TWh/yr useful heat, GB. Sources tagged; forecasts are
     # third-party pathways or explicitly-flagged Causeway derivations.
+    # Revised Jul 2026 from capacity research. GSHP heat anchored on EGEC 2025
+    # UK Country Update / Gonzalez Quiros et al. 2024: 1,430 GWhth/yr from
+    # ~55,210 units, 847-861 MWth installed (2023 base year, sales-derived,
+    # no later data published). Deep + mine water + open-loop district adds
+    # ~0.05-0.1 TWh/yr (Gateshead 6 MWth, Eden 1.4 MWth ~1 GWh/yr,
+    # Lanchester 3.6 MWth, Southampton no current data). EA 2024 note: only
+    # ~30-38k of the ~55k units may be operational - hence range floor.
     GEO = {
-        "today_gshp_TWh": 2.0,      # est. range 1.5-2.5: GSHP stock ~50k units
-                                    # (MCS cumulative + legacy) x typical output;
-                                    # consistent with ECUK 2025 HP electricity
-        "today_deep_TWh": 0.05,     # Southampton + Gateshead (6 MW) + Eden etc,
-                                    # capacity-derived estimates
-        "f2027_TWh": 2.5,           # 12-month trend: MCS 2025 installs +34% on
-                                    # 2024 record 58,176; GSHP ~2-3% share
+        "today_gshp_TWh": 1.43,     # EGEC 2025 (2023 base); range 1.4-2.0
+        "today_deep_TWh": 0.07,     # mine water + deep + open-loop district;
+                                    # mid of 0.05-0.1 estimate
+        "f2027_TWh": 1.7,           # 12-month trend: GSHP now ~1.3% of MCS HP
+                                    # installs (413 of 30.6k H1 2025); modest
+                                    # unit growth + Langarth/United Downs heat
         "f2031_TWh": 4.5,           # scenario: CCC 7th Carbon Budget pathway
                                     # (450k HP/yr by 2030) x assumed GSHP share
                                     # rising to ~5% + deep pipeline; range 3.5-6
         "f2050_TWh": 40.0,          # Project InnerSpace / REA / ARUP (Feb 2026):
                                     # 15 GWth ambition ~= ~40 TWh/yr heat
-        "today_cool_TWh": 0.1,      # est. range 0.05-0.2: reversible GSHP +
-                                    # ATES (mostly London Chalk); no national
-                                    # statistic exists - flagged estimate
+        "today_cool_TWh": 0.08,     # ATES ~8 MWth cold (11 systems, Jackson
+                                    # et al. 2024) + Southampton hist. 7-8 GWh
+                                    # + unmeasured reversible GSHP; range
+                                    # 0.05-0.1 - no national statistic exists
     }
     geo_today = GEO["today_gshp_TWh"] + GEO["today_deep_TWh"]
     geo_week = geo_today * g * 1000.0 * (0.85 * f_h + 0.15 * f_flat)
@@ -301,11 +309,14 @@ def main():
             "ambition_2050": GEO["f2050_TWh"],
         },
         "tags": {
-            "today": "Estimate: ~50k GSHPs + named deep/mine schemes "
-                     "(Southampton, Gateshead 6 MW, Eden); ECUK 2025 / "
-                     "DUKES 2025 basis" + EST,
-            "forecast_2027": "Trend: MCS installs 2025 +34% on 2024 record "
-                             "(58,176); GSHP ~2-3% of installs",
+            "today": "GSHP 1.43 TWh/yr: EGEC 2025 UK Country Update "
+                     "(~55,210 units, 847-861 MWth, 2023 base) + ~0.07 "
+                     "TWh/yr deep/mine/open-loop district (Gateshead 6 MWth, "
+                     "Eden 1.4 MWth, Lanchester; Southampton no current "
+                     "data). Range 1.4-2.0" + EST,
+            "forecast_2027": "Trend: GSHP ~1.3% of MCS heat-pump installs "
+                             "(H1 2025: 413 of 30.6k) + Langarth/United Downs "
+                             "pipeline" + EST,
             "forecast_2031": "Scenario: CCC Seventh Carbon Budget pathway "
                              "(450k HP/yr by 2030) x rising GSHP share + "
                              "deep pipeline - Causeway derivation, range 3.5-6" + EST,
@@ -481,8 +492,8 @@ def main():
                        "but free, so shifting to geothermal shrinks imports "
                        "twice over. 20% what-if: one-fifth of heat and "
                        "cooling service via geothermal networks (SCOP 5 / "
-                       "passive COP 20 + EST), current cap prices, running cost "
-                       "only."),
+                       "passive COP 20), current cap prices, running cost "
+                       "only." + EST),
     }
 
     # --- daily heat spark gap (wholesale basis; optional feeds) ----------------
@@ -606,6 +617,86 @@ def main():
                      "the grid decarbonises, while combustion never does."),
         }
 
+    # --- observed cooling: demand vs delivery (CDD saturation analysis) --------
+    # Summer daily underlying electricity demand (NESO ND + embedded solar +
+    # wind reconstructed) binned by CDD(18). Low-bin slope extrapolated
+    # linearly = latent cooling demand; observed bin means = delivered.
+    # Divergence = installed-capacity saturation, measured not assumed.
+    # DOES NOT yet replace the ECUK-shaped cooling in the bill/carbon chain -
+    # reconciliation over a full summer first.
+    cooling_observed = None
+    try:
+        this_year = dt.date.today().year
+        elec = fetch_daily_underlying_demand([this_year - 1, this_year])
+        out["sources"]["electricity"] = {"status": "ok",
+                                         "last_good": max(elec)}
+        # summer subset (May-Sep), weekend-adjusted
+        cdd_by_date = {d_: dd["cdd"][COOL_BASE][dd_idx[d_]]
+                       for d_ in elec if d_ in dd_idx}
+        summer = [d_ for d_ in cdd_by_date
+                  if 5 <= int(d_[5:7]) <= 9]
+        if len(summer) >= 60:
+            wd = [d_ for d_ in summer
+                  if dt.date.fromisoformat(d_).weekday() < 5]
+            we = [d_ for d_ in summer
+                  if dt.date.fromisoformat(d_).weekday() >= 5]
+            we_adj = ((sum(elec[d_] for d_ in wd) / len(wd))
+                      - (sum(elec[d_] for d_ in we) / len(we))) if we else 0.0
+            # weekend days lifted to weekday-equivalent
+            adj = {d_: elec[d_] + (we_adj if
+                   dt.date.fromisoformat(d_).weekday() >= 5 else 0.0)
+                   for d_ in summer}
+            # CDD bins: 0,(0-1],(1-2],(2-3],(3-4],>4
+            bins = {}
+            for d_, v in adj.items():
+                c = cdd_by_date[d_]
+                b = 0 if c == 0 else min(5, int(c) + 1)
+                bins.setdefault(b, []).append(v)
+            bin_mean = {b: sum(v) / len(v) for b, v in bins.items()
+                        if len(v) >= 3}
+            if 0 in bin_mean and len(bin_mean) >= 3:
+                base = bin_mean[0]
+                curve = {b: round(m - base, 1)
+                         for b, m in sorted(bin_mean.items()) if b > 0}
+                bin_n = {b: len(v) for b, v in bins.items()}
+                # latent slope from the first populated bin (GWh per CDD,
+                # bin b spans roughly CDD ~ b - 0.5)
+                first_b = min(curve)
+                slope = curve[first_b] / max(0.5, first_b - 0.5)                     if first_b > 1 else curve[first_b] / 0.5
+                # this week: delivered (curve lookup) vs latent (linear)
+                wk_deliv = 0.0
+                wk_latent = 0.0
+                for d_ in wk:
+                    c = dd["cdd"][COOL_BASE][dd_idx[d_]]
+                    b = 0 if c == 0 else min(5, int(c) + 1)
+                    wk_deliv += curve.get(b, curve.get(max(curve), 0.0))                         if b > 0 else 0.0
+                    wk_latent += slope * c
+                cooling_observed = {
+                    "response_curve_GWh_per_day": curve,
+                    "bin_days": {str(b): bin_n.get(b, 0)
+                                 for b in sorted(bin_mean)},
+                    "latent_slope_GWh_per_CDD": round(slope, 1),
+                    "week_delivered_GWh": round(wk_deliv, 0),
+                    "week_latent_GWh": round(max(wk_latent, wk_deliv), 0),
+                    "week_unmet_GWh": round(max(0.0, wk_latent - wk_deliv), 0),
+                    "summer_days_used": len(summer),
+                    "note": ("Observed cooling electricity from summer daily "
+                             "underlying demand (NESO ND + embedded solar/"
+                             "wind reconstructed) binned by cooling degree "
+                             "days. Flattening of the response curve at high "
+                             "CDD is installed-capacity saturation. Latent "
+                             "demand extrapolates the low-CDD slope "
+                             "linearly" + EST + ". Not yet used in the bill "
+                             "or carbon figures, which remain ECUK-anchored "
+                             "pending a full summer of reconciliation."),
+                }
+    except Exception:
+        traceback.print_exc()
+        cooling_observed = prev.get("cooling_observed")
+        out["sources"]["electricity"] = {
+            "status": "stale" if cooling_observed else "unavailable",
+            "last_good": prev.get("sources", {}).get("electricity", {}).get("last_good")}
+
     # winter context for summer visitors
     peak_i = max(range(len(space_heat) - 6),
                  key=lambda i: sum(space_heat[i:i + 7]))
@@ -626,6 +717,7 @@ def main():
         "spark": spark,
         "ni_panel": ni_panel,
         "carbon": carbon,
+        "cooling_observed": cooling_observed,
         "peak_week": peak_week,
         "series": {
             "dates": common,
@@ -660,6 +752,7 @@ def main():
     print("spark:", spark)
     print("ni_panel:", ni_panel)
     print("carbon:", carbon)
+    print("cooling_observed:", cooling_observed)
     print("peak week:", peak_week)
     _write(out)
 
