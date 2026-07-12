@@ -198,6 +198,13 @@
   </section>
 
   <section>
+    <h2>Cooling: demand vs delivery</h2>
+    <div class="billline" id="coolobsline"></div>
+    <div id="coolcurve" style="width:100%;height:300px"></div>
+    <p class="costnote" id="coolobsnote"></p>
+  </section>
+
+  <section>
     <div class="geo">
       <h2>Geothermal &amp; ground source — now and next</h2>
       <div class="geofig" id="geofig">—<small> GWh of heat from geothermal this week (estimate)</small></div>
@@ -256,12 +263,21 @@
       seasonal (colder mains water in winter), so gas space heating carries a
       small upward bias. The boiler-waste band uses in-situ UK boiler efficiency
       measurements (82.5–85%), not nameplate values.</p>
-    <p><b>Geothermal panel.</b> Today's figure is an estimate assembled from
-      the GSHP installed base (~50,000 units) and named deep/mine-water schemes;
-      no national metering of ground-source heat exists. Forward bars are
-      third-party pathways (CCC, Project InnerSpace/REA/ARUP) or explicitly
-      flagged Causeway derivations, not predictions. The 2031 bar carries a
-      range of roughly 3.5–6 TWh/yr.</p>
+    <p><b>Geothermal panel.</b> Today's heat figure is anchored on the EGEC
+      2025 UK Country Update (1,430 GWhth/yr from ~55,210 GSHP units,
+      847–861 MWth installed — a 2023 estimate from sales data; the
+      Environment Agency's 2024 review suggests only ~30–38k of those units
+      may be operational, hence the 1.4–2.0 range) plus ~0.07 TWh/yr from
+      mine-water, deep and open-loop district schemes. No national metering
+      or single register of ground-source systems exists; cooling is anchored
+      only on 11 ATES systems (~8 MWth cold) and historic Southampton data.
+      Forward bars are third-party pathways (CCC, Project InnerSpace/REA/ARUP)
+      or explicitly flagged Causeway derivations, not predictions. The 2031
+      bar carries a range of roughly 3.5–6 TWh/yr. If the NI DfE licensing
+      proposals (consultation to 7 Aug 2026; heat below 100&nbsp;m depth)
+      proceed, the resulting register with published system performance would
+      be the UK's first mandatory geothermal data source — this panel is
+      designed to ingest it from ~2027.</p>
     <p><b>Northern Ireland.</b> NI is not on the GB network shown here. NI heating
       is estimated annually from subnational consumption statistics scaled by NI
       degree days.</p>
@@ -285,7 +301,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '2.0.2';
+const SITE_VERSION = '3.0.0';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
@@ -499,6 +515,39 @@ fetch('data.json').then(r=>r.json()).then(d=>{
         `<td class="num">${r.g_per_useful_kwh}g</td></tr>`);
     });
     document.getElementById('carbnote').textContent = cb.note;
+  }
+
+  const co = d.cooling_observed;
+  if(co && co.response_curve_GWh_per_day){
+    document.getElementById('coolobsline').innerHTML =
+      'This week (observed basis): cooling delivered ~<b>' +
+      fmt(co.week_delivered_GWh) + ' GWh</b> of electricity · latent demand ~' +
+      fmt(co.week_latent_GWh) + ' GWh · unmet ~<b style="color:' +
+      css('--cool') + '">' + fmt(co.week_unmet_GWh) + ' GWh</b>';
+    const bins = Object.keys(co.response_curve_GWh_per_day).map(Number).sort((a,b)=>a-b);
+    const x = bins.map(b => b - 0.5);
+    const y = bins.map(b => co.response_curve_GWh_per_day[b]);
+    const xl = [0, Math.max(...x)];
+    const yl = xl.map(v => v * co.latent_slope_GWh_per_CDD);
+    Plotly.newPlot('coolcurve', [
+      {x: xl, y: yl, name: 'Latent demand (linear)', mode: 'lines',
+       line: {color: css('--muted'), dash: 'dot', width: 1.5}},
+      {x: x, y: y, name: 'Observed response', mode: 'lines+markers',
+       line: {color: css('--cool'), width: 2.5},
+       marker: {size: 8, color: css('--cool')}}
+    ], {
+      paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+      font:{family:'Lato', color:css('--muted'), size:12},
+      margin:{l:60,r:10,t:10,b:44},
+      xaxis:{title:'Cooling degree days (base 18°C)', gridcolor:css('--line')},
+      yaxis:{title:'Cooling electricity, GWh/day', gridcolor:css('--line')},
+      legend:{orientation:'h', y:1.15}
+    }, {displayModeBar:false, responsive:true});
+    document.getElementById('coolobsnote').textContent = co.note +
+      ' Sample: ' + co.summer_days_used + ' summer days.';
+  } else {
+    document.getElementById('coolobsline').textContent =
+      'Observed cooling analysis pending sufficient summer data.';
   }
 
   const geo = d.geothermal;
