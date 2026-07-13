@@ -27,6 +27,20 @@ from fetch_electricity import fetch_daily_underlying_demand   # noqa: E402
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "docs", "data.json")
 WINDOW_DAYS = 365
 EST = " \u2020"   # marks a Causeway estimate - see site footnote
+
+
+def _recency(status, last_good, lag_ok_days=7):
+    """Downgrade an 'ok' source to 'lagging' if last_good is old.
+    Fetch health and data recency are different facts."""
+    if status == "ok" and last_good:
+        try:
+            age = (dt.date.today() - dt.date.fromisoformat(
+                str(last_good)[:10])).days
+            if age > lag_ok_days:
+                return "lagging"
+        except ValueError:
+            pass
+    return status
 COOL_BASE = "18.0"
 
 ECUK_UK_GAS_SPACE_HEAT_TWH_2024 = 258.1
@@ -628,8 +642,11 @@ def main():
     try:
         this_year = dt.date.today().year
         elec = fetch_daily_underlying_demand([this_year - 1, this_year])
-        out["sources"]["electricity"] = {"status": "ok",
-                                         "last_good": max(elec)}
+        out["sources"]["electricity"] = {
+            "status": _recency("ok", max(elec), lag_ok_days=7),
+            "last_good": max(elec),
+            "note": "NESO demand publishes on a lag; historic file "
+                    "refreshed periodically, update feed ~daily"}
         # summer subset (May-Sep), weekend-adjusted
         cdd_by_date = {d_: dd["cdd"][COOL_BASE][dd_idx[d_]]
                        for d_ in elec if d_ in dd_idx}
