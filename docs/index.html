@@ -152,9 +152,10 @@
         <div class="cap" id="st_carbon_cap">heating &amp; cooling emissions this week</div></div>
     </div>
     <div class="whatifrow">
-      <div class="wtitle" style="display:flex;align-items:center;gap:8px">WHAT IF
+      <div class="wtitle" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">WHAT IF
         <span style="font-size:2.2em;font-weight:700;color:var(--geo);line-height:1">20%</span>
-        OF HEAT &amp; COOLING MOVED TO GEOTHERMAL?</div>
+        OF HEAT &amp; COOLING MOVED TO
+        <span style="font-size:2.2em;font-weight:700;color:var(--geo);line-height:1">GEOTHERMAL?</span></div>
       <div class="statrow">
         <div class="stat"><div class="fig" id="wf_energy">—</div>
           <div class="cap">GWh purchased — the ground supplies the rest free</div></div>
@@ -330,7 +331,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '3.5.1';
+const SITE_VERSION = '3.5.2';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
