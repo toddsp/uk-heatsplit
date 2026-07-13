@@ -139,13 +139,24 @@ def fetch_daily_underlying_demand(years):
               "historic file only")
 
     out = {}
+    today = dt.date.today().isoformat()
+    dropped_future = 0
+    dropped_dup = 0
     for date, s in daily_mw_sum.items():
         n = daily_counts[date]
+        if date >= today:                # exclude today + forward/forecast rows
+            dropped_future += 1
+            continue
+        if n > 50:                       # duplicated/revised rows double-count
+            dropped_dup += 1
+            continue
         if n >= 40:                      # near-complete day only
             out[date] = round(s * 0.5 / 1000.0, 1)   # MW half-hours -> GWh
     if not out:
         raise RuntimeError("NESO demand fetch returned no complete days")
-    print(f"NESO demand: {len(out)} days, {min(out)} to {max(out)}")
+    print(f"NESO demand: {len(out)} days, {min(out)} to {max(out)}"
+          + (f"; dropped {dropped_future} future-dated" if dropped_future else "")
+          + (f"; dropped {dropped_dup} duplicated" if dropped_dup else ""))
     return out
 
 
