@@ -144,7 +144,7 @@
       <div class="stat"><div class="fig" id="st_energy">—</div>
         <div class="cap">GWh of heating &amp; cooling energy purchased this week</div></div>
       <div class="stat"><div class="fig" id="st_indig">—</div>
-        <div class="cap">estimated UK-indigenous share of that energy</div></div>
+        <div class="cap">estimated UK-indigenous share of heat &amp; cooling delivered</div></div>
       <div class="stat"><div class="fig" id="st_bill">—</div>
         <div class="cap" id="st_bill_cap">national energy bill this week</div></div>
     </div>
@@ -325,7 +325,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '3.4.0';
+const SITE_VERSION = '3.5.0';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
