@@ -786,6 +786,26 @@ def main():
                 "productivity_note": "hot days cost GB ~GBP 1.2bn/yr in lost "
                     "output on average, GBP 5.3bn in 2020 (ONS)",
             },
+            "tier_bars": ({
+                "t1_delivered_th_GWh": round(
+                    cooling_observed["week_delivered_GWh"] * AIR_COOL_EER, 0),
+                "t2_unmet_th_GWh": round(
+                    (cooling_observed.get("week_unmet_GWh") or 0)
+                    * AIR_COOL_EER, 0),
+                "t3_low_GWh": scen["low"]["latent_thermal_GWh"],
+                "t3_central_GWh": scen["central"]["latent_thermal_GWh"],
+                "t3_high_GWh": scen["high"]["latent_thermal_GWh"],
+            } if cooling_observed else None),
+            "utes": {
+                # if the central tier-3 load were ground-served, the rejected
+                # heat (load + pump input) banks in the store; UTES round-trip
+                # thermal recovery ~70% (ATES literature range 50-80%) †
+                "round_trip": 0.7,
+                "summer_banked_GWh": round(
+                    central * (1 + 1 / GROUND_COOL_COP), 0),
+                "winter_recovered_GWh": round(
+                    central * (1 + 1 / GROUND_COOL_COP) * 0.7, 0),
+            },
             "note": ("The observed curve above only sees buildings that have "
                      "cooling. This tier estimates the sweltering remainder: "
                      "overheating-degree-hours above the CIBSE 26 degC "
