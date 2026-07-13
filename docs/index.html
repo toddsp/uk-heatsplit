@@ -39,8 +39,9 @@
   h1{font-family:Lato;font-weight:900;font-size:clamp(26px,5vw,40px);line-height:1.12}
   h1 .ember{color:var(--ember)} h1 .cool{color:var(--cool)}
   .sub{color:var(--muted);margin-top:10px;font-size:18px;line-height:1.6}
-  .statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
-  @media (max-width:640px){.statrow{grid-template-columns:1fr}}
+  .statrow{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:28px}
+  @media (max-width:760px){.statrow{grid-template-columns:1fr 1fr}}
+  @media (max-width:400px){.statrow{grid-template-columns:1fr}}
   .stat .fig{font-family:"IBM Plex Mono";font-size:clamp(24px,4vw,38px);font-weight:500}
   .stat .cap{font-size:13px;color:var(--muted);margin-top:2px;max-width:26ch}
   .whatifrow{border:1px solid var(--geo);border-radius:6px;padding:14px 18px;margin-top:18px;
@@ -147,6 +148,8 @@
         <div class="cap">estimated UK-indigenous share of heat &amp; cooling delivered</div></div>
       <div class="stat"><div class="fig" id="st_bill">—</div>
         <div class="cap" id="st_bill_cap">national energy bill this week</div></div>
+      <div class="stat"><div class="fig" id="st_carbon">—</div>
+        <div class="cap" id="st_carbon_cap">heating &amp; cooling emissions this week</div></div>
     </div>
     <div class="whatifrow">
       <div class="wtitle" style="display:flex;align-items:center;gap:8px">WHAT IF
@@ -159,6 +162,8 @@
           <div class="cap">UK-indigenous share</div></div>
         <div class="stat"><div class="fig" id="wf_bill">—</div>
           <div class="cap">national bill</div></div>
+        <div class="stat"><div class="fig" id="wf_carbon">—</div>
+          <div class="cap" id="wf_carbon_cap">emissions</div></div>
       </div>
     </div>
     <div class="context" id="peakctx" style="margin-top:14px"></div>
@@ -325,7 +330,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '3.5.0';
+const SITE_VERSION = '3.5.1';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
@@ -390,12 +395,26 @@ fetch('data.json').then(r=>r.json()).then(d=>{
           'm · cooling £' + fmt(d.cost.national_week_cool_Mgbp) + 'm)';
       }
     }
+    if(d.carbon && d.carbon.week_kt != null){
+      document.getElementById('st_carbon').textContent =
+        fmt(d.carbon.week_kt) + ' kt';
+      document.getElementById('st_carbon_cap').textContent =
+        'heating & cooling emissions this week (CO2e; heat ' +
+        fmt(d.carbon.week_heat_kt) + ' kt · cooling ' +
+        fmt(d.carbon.week_cool_kt) + ' kt)';
+    }
     if(hh && hh.whatif_20pct_geothermal){
       const w = hh.whatif_20pct_geothermal;
       document.getElementById('wf_energy').textContent = fmt(w.purchased_GWh);
       document.getElementById('wf_indig').textContent =
         (w.indigenous_pct != null ? w.indigenous_pct + '%' : '—');
       document.getElementById('wf_bill').textContent = '£' + fmt(w.bill_Mgbp) + 'm';
+      if(d.carbon && d.carbon.whatif_20pct_kt != null){
+        document.getElementById('wf_carbon').textContent =
+          fmt(d.carbon.whatif_20pct_kt) + ' kt';
+        document.getElementById('wf_carbon_cap').textContent =
+          'emissions (saves ' + fmt(d.carbon.whatif_saving_kt) + ' kt)';
+      }
     }
 
     const seen = {};
