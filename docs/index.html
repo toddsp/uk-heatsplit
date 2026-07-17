@@ -213,6 +213,7 @@
       <div class="geobars" id="geobars"></div>
       <div class="billline" id="geowhatif" style="margin-top:18px"></div>
       <p class="geosub" id="geowhatifnote"></p>
+      <p class="geosub" id="geobench" style="margin-top:16px"></p>
       <p class="geosub" style="margin-top:16px">Geothermal heat is steady,
         local, combustion-free — and the same boreholes and aquifers that heat in
         winter cool in summer, rejecting heat to ~12°C ground instead of 30°C
@@ -331,7 +332,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '3.5.3';
+const SITE_VERSION = '3.6.0';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
@@ -691,6 +692,9 @@ fetch('data.json').then(r=>r.json()).then(d=>{
         fmt(actual) + 'm — a saving of <b>~£' + fmt(saving) + ' million</b>.';
       document.getElementById('geowhatifnote').textContent = wf.assumptions;
     }
+    if(geo.benchmark){
+      document.getElementById('geobench').textContent = geo.benchmark;
+    }
     const rows = [
       ["Today",  geo.annual_TWh.today,         false, geo.tags.today],
       ["2027",   geo.annual_TWh.forecast_2027, true,  geo.tags.forecast_2027],
@@ -759,6 +763,5 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   });
 }).catch(()=>{document.getElementById('stamp').textContent='data.json not found — run the workflow once';});
 </script>
-<script data-goatcounter="https://causewaygt.goatcounter.com/count"
-        async src="//gc.zgo.at/count.js"></script></body>
+</body>
 </html>
