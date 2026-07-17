@@ -916,6 +916,40 @@ def main():
         "headlines": headlines,
         "spark": spark,
         "ni_panel": ni_panel,
+        "why_heat": {
+            # Annual, UK, calendar 2024. Sourced anchors: ECUK 2025 (final
+            # energy 128.1 mtoe = ~1,490 TWh; transport 54.0 mtoe = 628 TWh,
+            # 42%, 93% petroleum); DESNZ 2024 provisional GHG by sector
+            # (transport the largest emitting sector); DUKES import
+            # dependency; dashboard INDIG origin shares. Service-level
+            # allocations are Causeway derivations - all daggered.
+            "year": 2024,
+            "services_TWh": {"heat": 630, "transport": 628,
+                             "power_other": 235},
+            "cost_bn": {"heat": 42, "transport": 70, "power_other": 60},
+            "imported_TWh": {"heat": 233, "transport": 415,
+                             "power_other": 59},
+            "emissions_Mt": {"heat": 125, "transport": 115,
+                             "power_other": 30},
+            "note": ("Annual, calendar 2024. Sourced: UK final energy "
+                     "consumption 1,490 TWh and transport 628 TWh (42%, 93% "
+                     "petroleum) - DESNZ ECUK 2025; transport the largest "
+                     "emitting sector - DESNZ 2024 provisional. Derived" +
+                     EST + ": heat = heat end uses across homes, services "
+                     "and industry (~630 TWh - the largest single use of "
+                     "energy in Britain); power = non-heat electricity; "
+                     "costs from typical 2024 retail/pump prices x volumes; "
+                     "imports allocate each service's inputs by the origin "
+                     "shares used site-wide (gas ~38% UK, electricity ~75%, "
+                     "petroleum ~30%); emissions allocate combustion by "
+                     "service and grid CO2 by electricity use. Non-energy "
+                     "emissions (agriculture, waste, F-gases) excluded. "
+                     "The pattern the four pies show: heat is the biggest "
+                     "energy service, the cheapest per unit (untaxed "
+                     "fossil fuel), a major import driver, and a top-tier "
+                     "emitter - which is why it is the transition's "
+                     "biggest prize."),
+        },
         "carbon": carbon,
         "cooling_observed": cooling_observed,
         "comfort_deficit": comfort_deficit,
