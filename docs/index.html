@@ -345,7 +345,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '4.0.1';
+const SITE_VERSION = '4.0.3';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
@@ -694,16 +694,21 @@ fetch('data.json').then(r=>r.json()).then(d=>{
       }
       document.getElementById('geoshare').textContent = t;
     }
-    const wf = d.cost && d.cost.whatif_geothermal;
-    if(wf && d.cost.national_week_total_Mgbp){
+    const w20 = d.headlines && d.headlines.whatif_20pct_geothermal;
+    if(w20 && d.cost.national_week_total_Mgbp){
       const actual = d.cost.national_week_total_Mgbp;
-      const saving = actual - wf.cost_Mgbp;
+      const saving = actual - w20.bill_Mgbp;
       document.getElementById('geowhatif').innerHTML =
-        'What if? The same useful heat and cooling delivered by geothermal ' +
-        'networks would have cost <b style="color:' + css('--geo') + '">~£' +
-        fmt(wf.cost_Mgbp) + ' million</b> this week instead of ~£' +
-        fmt(actual) + 'm — a saving of <b>~£' + fmt(saving) + ' million</b>.';
-      document.getElementById('geowhatifnote').textContent = wf.assumptions;
+        'What if? Moving <b style="color:' + css('--geo') + '">20% of heat ' +
+        'and cooling</b> to geothermal networks would have cost <b style="color:' +
+        css('--geo') + '">~£' + fmt(w20.bill_Mgbp) + ' million</b> this week ' +
+        'instead of ~£' + fmt(actual) + 'm — a saving of <b>~£' +
+        fmt(saving) + ' million</b>. This matches the headline what-if above.';
+      document.getElementById('geowhatifnote').textContent =
+        'Illustrative Causeway what-if: one-fifth of useful heat and cooling ' +
+        'delivered via geothermal networks — heat at SCOP 5.0, cooling ' +
+        'passively at COP ~20, current capped electricity price. Running cost ' +
+        'only; no capex, network build, or price feedbacks. †';
     }
     if(geo.benchmark){
       document.getElementById('geobench').textContent = geo.benchmark;
@@ -766,10 +771,11 @@ fetch('data.json').then(r=>r.json()).then(d=>{
         hole: 0.45,
       }], {
         paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-        showlegend: el === 'why_twh',
-        legend: {font: {color: '#c9d3cc', size: 11},
-                 orientation: 'h', y: -0.12},
-        margin: {l: 6, r: 6, t: 6, b: 6},
+        showlegend: true,
+        legend: {font: {color: '#c9d3cc', size: 10.5},
+                 orientation: 'h', xanchor: 'center', x: 0.5,
+                 yanchor: 'top', y: -0.02},
+        margin: {l: 6, r: 6, t: 6, b: 42},
         font: {color: '#c9d3cc'},
       }, {displayModeBar: false, responsive: true});
     }
