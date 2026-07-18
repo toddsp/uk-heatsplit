@@ -274,6 +274,7 @@
     <p class="costnote" id="whyheatnote"></p>
 
     <h2>Method &amp; caveats</h2>
+    <p class="geosub" style="margin-bottom:10px">Full technical methodology, with equations, figures and a complete bibliography: <a href="uk-heatsplit-methodology.pdf" style="color:var(--geo)">UK Heat Split: data sources and estimation methodology (PDF)</a>.</p>
     <p style="color:var(--geo);font-size:15px;line-height:1.6">† Current
       Causeway Energies estimate – challenge and input welcome at
       <a href="mailto:contact@causewaygt.com" style="color:var(--geo)">contact@causewaygt.com</a>.</p>
@@ -344,7 +345,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '4.0.0';
+const SITE_VERSION = '4.0.1';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
@@ -795,7 +796,11 @@ fetch('data.json').then(r=>r.json()).then(d=>{
   if(reg){
     document.getElementById('fit').textContent =
       'R² ' + reg.r2 + ' over ' + reg.window_days + ' days, base ' +
-      reg.base_temp + '°C, sensitivity ' + reg.slope_GWh_per_HDD + ' GWh per degree day';
+      reg.base_temp + '°C, sensitivity ' + reg.slope_GWh_per_HDD +
+      ' GWh per degree day' +
+      (reg.resid_se_GWh ? ' (residual SE ±' + fmt(reg.resid_se_GWh) +
+       ' GWh/day — the honest daily uncertainty; R² is flattered by the '+
+       'annual cycle)' : '');
   }
   const c=d.calibration;
   if(c){
@@ -803,8 +808,10 @@ fetch('data.json').then(r=>r.json()).then(d=>{
       `Trailing 12-month gas space-heat estimate ${c.model_12m_gas_space_heat_TWh} TWh vs ` +
       `ECUK-derived, GB-adjusted, weather-normalised anchor ${c.ecuk_anchor_TWh} TWh ` +
       `(ratio ${c.ratio}). ` +
-      (c.within_10pct ? 'Within the ±10% publication threshold.'
-                      : 'OUTSIDE the ±10% threshold — split under review.');
+      'The model runs ' + (c.ratio>=1?'+':'') + Math.round((c.ratio-1)*100) +
+      '% vs the ECUK anchor. ' +
+      (c.within_10pct ? 'Within our ±10% publication gate.'
+                      : 'OUTSIDE the ±10% gate — split under review.');
   }
   const st=document.getElementById('status');
   Object.entries(d.sources||{}).forEach(([k,v])=>{
