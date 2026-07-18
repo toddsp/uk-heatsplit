@@ -75,7 +75,8 @@ def ols(x, y):
     ss_tot = sum((yi - my) ** 2 for yi in y)
     ss_res = sum((yi - (intercept + slope * xi)) ** 2 for xi, yi in zip(x, y))
     r2 = 1 - ss_res / ss_tot if ss_tot else 0.0
-    return slope, intercept, r2
+    resid_se = (ss_res / (n - 2)) ** 0.5 if n > 2 else 0.0
+    return slope, intercept, r2, resid_se
 
 
 def load_previous():
@@ -138,10 +139,11 @@ def main():
     best = None
     for base in HDD_BASES:
         x = [dd["hdd"][str(base)][dd_idx[d]] for d in common]
-        slope, intercept, r2 = ols(x, y)
+        slope, intercept, r2, resid_se = ols(x, y)
         if best is None or r2 > best["r2"]:
             best = {"base_temp": base, "slope_GWh_per_HDD": round(slope, 1),
                     "intercept_GWh": round(intercept, 1), "r2": round(r2, 3),
+                    "resid_se_GWh": round(resid_se, 0),
                     "window_days": len(common), "target": "LDZ sum (buildings)"}
     base = str(best["base_temp"])
     hdd_series = [dd["hdd"][base][dd_idx[d]] for d in common]
@@ -695,7 +697,9 @@ def main():
             "whatif_saving_kt": round((em_removed - em_added) / 1000.0, 0),
             "routes_g_per_useful_kwh": routes,
             "note": ("Combustion factors: DESNZ GHG conversion factors 2025 "
-                     "(gas ~183, kerosene ~247, coal ~345 gCO2e/kWh). "
+                     "(natural gas 0.18296 kgCO2e/kWh = 183 g, gross calorific "
+                     "value basis, consistent with UK metered gas "
+                     "billing; kerosene ~247, coal ~345 gCO2e/kWh). "
                      "Bioenergy counted at zero combustion emissions "
                      "(biogenic convention; supply chain excluded). Heat "
                      "networks assumed gas-fired" + EST + ". Electricity at "
@@ -784,7 +788,7 @@ def main():
                     "summer_days_used": len(anomaly),                    "summer_days_used": len(summer),
                     "note": ("Observed cooling electricity from summer daily "
                              "underlying demand (NESO ND + embedded solar/"
-                             "wind reconstructed), demeaned within month and "
+                             "wind reconstructed), centred within month and "
                              "weekend class to remove the holiday/seasonal "
                              "baseline, then binned by cooling degree days. "
                              "Flattening at high CDD indicates capacity and "
