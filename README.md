@@ -9,6 +9,11 @@ water, and ground source) supplies today and could supply next — and, at the
 foot of the page, why heat is the energy transition's biggest prize.
 
 **Live site:** https://causewaygt.github.io/uk-heatsplit/
+**Full methodology:** [UK Heat Split: data sources and estimation methodology (PDF)](docs/uk-heatsplit-methodology.pdf)
+
+Every live figure is a model estimate, not a measurement. Every figure resting
+on Causeway judgement is marked † and is open to challenge at
+contact@causewaygt.com.
 
 ## What the dashboard shows
 
@@ -27,13 +32,13 @@ foot of the page, why heat is the energy transition's biggest prize.
 - **What heat costs** — pence per useful kWh by route at current Ofgem cap
   rates, and the national weekly bill.
 - **What heat emits** — weekly emissions with a heat/cool split, and gCO2e
-  per useful kWh by route: combustion at fixed DESNZ factors, electric routes
-  at the live GB grid intensity (NESO Carbon Intensity API, 7-day mean) — so
-  the heat-pump rows fall as the grid decarbonises while combustion never
-  does.
+  per useful kWh by route: combustion at fixed DESNZ factors (natural gas
+  0.18296 kgCO2e/kWh, gross CV basis), electric routes at the live GB grid
+  intensity (NESO Carbon Intensity API, 7-day mean) — so the heat-pump rows
+  fall as the grid decarbonises while combustion never does.
 - **Geothermal — now and next** — heat and cooling from geothermal this week,
   plus annual bars for today, 2027, 2031 and 2050, each tagged to its source.
-  Today's heat is anchored on the EGEC 2025 UK Country Update (1,430 GWhth/yr
+  Today's heat is anchored on the EGEC 2025 UK Country Update (~1.43 TWh/yr
   from ~55,210 GSHP units, 2023 base) plus mine-water, deep and open-loop
   district schemes; the 2027 and 2031 bars carry the EGEC Geothermal Market
   Report 2025 evidence (4,070 UK unit sales, 4 new large closed-loop systems,
@@ -42,11 +47,13 @@ foot of the page, why heat is the energy transition's biggest prize.
   2025 — Sweden alone sold 26,785 units to the UK's 4,070.
 - **The gas engine room** — daily gas offtake to the distribution zones
   (buildings) against the regression-estimated space-heating signal, with
-  total NTS shown for context.
+  total NTS shown for context. The fit reports R², the residual standard
+  error (the honest daily uncertainty), and the calibration ratio against the
+  ECUK anchor with its ±10% publication gate.
 - **Cooling: demand vs delivery, in three tiers** —
   *Tiers 1 & 2 (the equipped fleet):* an observed cooling response curve from
   half-hourly national electricity demand (NESO, embedded solar and wind
-  reconstructed, demeaned within month and weekend class), binned by cooling
+  reconstructed, centred within month and weekend class), binned by cooling
   degree days: what installed cooling delivers, and whether it saturates.
   *Tier 3 (the comfort deficit):* the buildings with no cooling at all —
   overheating-degree-hours above the CIBSE 26°C threshold (population-
@@ -75,19 +82,17 @@ Daily gas offtake to Britain's local distribution zones (LDZ — the network
 serving homes and most businesses, excluding directly connected power
 stations) is regressed against population-weighted GB heating degree days
 (ERA5 reanalysis via Open-Meteo). The temperature-sensitive component is
-attributed to space heating, following the published Watson/Sansom method;
-the trailing 12-month total is calibrated against the DESNZ ECUK end-use
-tables, GB-adjusted and weather-normalised (current ratio ~1.10, within the
-±10% publication threshold). Other fuels and cooling take their annual levels
-from ECUK 2025 (calendar 2024) shaped by heating/cooling degree days. The
-indigenous share is measured on a services basis — each unit of delivered
-heat or cooling inherits the UK-origin share of its energy input, with
-harvested ambient/ground heat counting as 100% indigenous, consistent with
-Eurostat/DUKES renewable-supply accounting. The WHY HEAT? panel uses annual
-whole-economy anchors (ECUK final energy and transport; DESNZ provisional
-GHG by sector; DUKES import dependency) with service-level allocations
-derived by Causeway. **Every live figure is a model estimate, not a
-measurement** — caveats are stated on the site.
+attributed to space heating, following the published Watson et al. / Sansom
+method; the trailing 12-month total is calibrated against the DESNZ ECUK
+end-use tables, GB-adjusted and weather-normalised (current ratio ~1.10,
+within the ±10% publication threshold). Other fuels and cooling take their
+annual levels from ECUK 2025 (calendar 2024) shaped by heating/cooling degree
+days. The indigenous share is measured on a services basis — each unit of
+delivered heat or cooling inherits the UK-origin share of its energy input,
+with harvested ambient/ground heat counting as 100% indigenous, consistent
+with Eurostat/DUKES renewable-supply accounting. **The full technical
+methodology — with equations, figures and a complete bibliography — is in
+[docs/uk-heatsplit-methodology.pdf](docs/uk-heatsplit-methodology.pdf).**
 
 ## Estimates open to challenge
 
@@ -105,14 +110,15 @@ HEAT? service-level allocations. Challenge and input welcome:
 ## Data sources & licences
 
 National Gas Transmission open data (demand and SAP publications, REST API;
-derived public use confirmed with the operator) · Contains BMRS data
-© Elexon Limited copyright and database right 2026 · NESO Data Portal
-(demand) and NESO Carbon Intensity API, NESO Open Licence · Open-Meteo.com
-(CC BY 4.0) / Copernicus ERA5 (daily and hourly) · DESNZ ECUK, DUKES and GHG
-conversion factors, MHCLG dwelling statistics, and NISRA statistics, under
-the Open Government Licence v3.0 · EGEC 2025 UK Country Update and EGEC
-Geothermal Market Report 2025, English Housing Survey, CCC adaptation
-reporting, ONS/UKHSA heat mortality and productivity statistics (cited).
+derived public use and attribution confirmed with the operator, July 2026) ·
+Contains BMRS data © Elexon Limited copyright and database right 2026 · NESO
+Data Portal (demand) and NESO Carbon Intensity API, NESO Open Licence ·
+Open-Meteo.com (CC BY 4.0) / Copernicus ERA5 (daily and hourly) · DESNZ ECUK,
+DUKES and GHG conversion factors, MHCLG dwelling statistics, and NISRA
+statistics, under the Open Government Licence v3.0 · EGEC 2025 UK Country
+Update and EGEC Geothermal Market Report 2025, English Housing Survey, CCC
+adaptation reporting, ONS/UKHSA heat mortality and productivity statistics
+(cited). Full bibliography with DOIs in the methodology PDF.
 
 ## How it runs
 
@@ -129,16 +135,30 @@ Anchor constants are refreshed on a maintenance calendar: Ofgem cap
 quarterly; ECUK/DUKES and the WHY HEAT? panel annually; the geothermal panel
 annually on MCS/EGEC release.
 
+## Repository layout
+
+```
+docs/
+  index.html                      the dashboard (static; Plotly)
+  data.json                       written daily by the workflow
+  uk-heatsplit-methodology.pdf    full technical methodology statement
+scripts/
+  build.py                        pulls feeds, fits, computes, writes data.json
+  fetch_*.py                      per-source fetchers
+.github/workflows/update.yml      daily cron
+```
+
 ## Versioning
 
 The site carries a version (footer, `SITE_VERSION` in `docs/index.html`):
 x.y.z where **x** = new data source or panel, **y** = update to an existing
-source or anchor, **z** = wording or formatting. Current: **4.0.0**.
+source or anchor, **z** = wording or formatting. Current: **4.0.1**.
 History: v1 launch (gas split, costs, spark gap, geothermal, NI) → v2 carbon
 layer → v3.0–3.2 observed cooling analysis (NESO demand, response curve,
 recency-aware sources) → v3.3–3.4 comfort deficit, tier graphic and UTES
 dividend → v3.5 services-basis indigenous share and emissions headline →
 v3.6 EGEC Geothermal Market Report 2025 refinements → v4.0 WHY HEAT?
-whole-economy panel.
+whole-economy panel → v4.0.1 methodology statement, carbon basis, residual
+SE and calibration ratio surfaced.
 
 *A Causeway Energies public-interest tool — https://causewaygt.com*
