@@ -377,7 +377,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '5.2.1';
+const SITE_VERSION = '5.3.0';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
@@ -667,7 +667,17 @@ fetch('data.json').then(r=>r.json()).then(d=>{
         ? ' · summer centring slope ' + cr.summer_centring_slope_GWh_per_CDD +
           ' GWh/CDD for comparison'
         : '');
-    document.getElementById('reconnote').textContent = cr.note;
+    let rn = cr.note;
+    if(cr.stability && cr.stability.runs_60d >= 2){
+      const st = cr.stability;
+      rn += ' Stability (' + st.runs_60d + ' runs, 60d): fitted base ' +
+        st.base_range_60d[0] + '\u2013' + st.base_range_60d[1] +
+        '\u00b0C, slope ' + st.slope_range_60d[0] + '\u2013' +
+        st.slope_range_60d[1] + ' GWh/CDD' +
+        (st.base_stable_pm1c ? ' \u2014 within the switchover gate.'
+                             : ' \u2014 not yet within the switchover gate.');
+    }
+    document.getElementById('reconnote').textContent = rn;
   }
 
   const cd = d.comfort_deficit;
