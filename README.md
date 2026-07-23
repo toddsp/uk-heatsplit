@@ -22,6 +22,14 @@ contact@causewaygt.com.
   split between heating and cooling; and heating & cooling emissions —
   alongside a what-if strip answering all four with 20% of heat and cooling
   moved to geothermal.
+- **Trends** — a sparkline under each headline showing its weekly history
+  over a selectable 1-week to 12-month window, with the change since the
+  window start and the 20% geothermal what-if overlaid in green (the shaded
+  band is the forgone saving). Live weeks only: each point is computed with
+  the same estimators as the headline, priced at the Ofgem cap in force
+  that week and carboned at that week's mean grid intensity — no modelled
+  back-cast. The window is bounded by the ~13 months the National Gas feed
+  serves; a longer modelled series, visually distinguished, is planned.
 - **Dual bars, same scale** — energy in (fuel and electricity purchased) vs
   useful heat and cooling delivered: combustion derated by in-situ boiler
   efficiencies, heat pumps credited with their harvested ambient heat,
@@ -30,7 +38,9 @@ contact@causewaygt.com.
   ground-source heat pump, updated daily from the National Gas SAP and the
   Elexon market index.
 - **What heat costs** — pence per useful kWh by route at current Ofgem cap
-  rates, and the national weekly bill.
+  rates, and the national weekly bill — priced by sector: each fuel's
+  domestic share (ECUK) at the Ofgem cap, its services share at
+  DESNZ QEP-anchored non-domestic rates†, standing charges excluded.
 - **What heat emits** — weekly emissions with a heat/cool split, and gCO2e
   per useful kWh by route: combustion at fixed DESNZ factors (natural gas
   0.18296 kgCO2e/kWh, gross CV basis), electric routes at the live GB grid
@@ -131,9 +141,15 @@ Feed failures fall back to the last good values and are flagged on the page
 notification. Site traffic is measured with GoatCounter (cookieless, no
 personal data). No API keys required; fork-friendly.
 
+The daily commit of `docs/data.json` also carries the weekly trend history
+(capped at 60 weeks), so the git log doubles as its backup: each run appends
+the newest complete week, recomputes the two most recent against feed
+revisions, and leaves older weeks frozen as first published.
+
 Anchor constants are refreshed on a maintenance calendar: Ofgem cap
-quarterly; ECUK/DUKES and the WHY HEAT? panel annually; the geothermal panel
-annually on MCS/EGEC release.
+quarterly (one row added to the cap-history table in `build.py`, so past
+weeks keep the cap that was in force); ECUK/DUKES and the WHY HEAT? panel
+annually; the geothermal panel annually on MCS/EGEC release.
 
 ## Repository layout
 
@@ -152,13 +168,15 @@ scripts/
 
 The site carries a version (footer, `SITE_VERSION` in `docs/index.html`):
 x.y.z where **x** = new data source or panel, **y** = update to an existing
-source or anchor, **z** = wording or formatting. Current: **4.0.1**.
+source or anchor, **z** = wording or formatting. Current: **5.0.0**.
 History: v1 launch (gas split, costs, spark gap, geothermal, NI) → v2 carbon
 layer → v3.0–3.2 observed cooling analysis (NESO demand, response curve,
 recency-aware sources) → v3.3–3.4 comfort deficit, tier graphic and UTES
 dividend → v3.5 services-basis indigenous share and emissions headline →
 v3.6 EGEC Geothermal Market Report 2025 refinements → v4.0 WHY HEAT?
-whole-economy panel → v4.0.1 methodology statement, carbon basis, residual
-SE and calibration ratio surfaced.
+whole-economy panel → v4.0.1–4.0.3 methodology statement, carbon basis,
+residual SE and calibration ratio surfaced → v5.0 live trend layer: weekly
+headline history with per-week Ofgem cap and grid intensity, sparklines and
+what-if overlay.
 
 *A Causeway Energies public-interest tool — https://causewaygt.com*
