@@ -69,6 +69,11 @@ contact@causewaygt.com.
   half-hourly national electricity demand (NESO, embedded solar and wind
   reconstructed, centred within month and weekend class), binned by cooling
   degree days: what installed cooling delivers, and whether it saturates.
+  A reconciliation diagnostic — a year-round regression of demand on
+  heating and cooling degree days jointly, with the cooling base swept so
+  the data chooses where conditioning starts — decomposes the gap between
+  the observed response and the ECUK cooling & ventilation anchor into
+  weather-driven and weather-flat parts (published, not yet in the bill).
   *Tier 3 (the comfort deficit):* the buildings with no cooling at all —
   overheating-degree-hours above the CIBSE 26°C threshold (population-
   weighted, live from hourly ERA5) × the unequipped stock at risk (bounded
@@ -172,7 +177,7 @@ scripts/
 
 The site carries a version (footer, `SITE_VERSION` in `docs/index.html`):
 x.y.z where **x** = new data source or panel, **y** = update to an existing
-source or anchor, **z** = wording or formatting. Current: **5.1.0**.
+source or anchor, **z** = wording or formatting. Current: **5.2.0**.
 History: v1 launch (gas split, costs, spark gap, geothermal, NI) → v2 carbon
 layer → v3.0–3.2 observed cooling analysis (NESO demand, response curve,
 recency-aware sources) → v3.3–3.4 comfort deficit, tier graphic and UTES
@@ -182,6 +187,7 @@ whole-economy panel → v4.0.1–4.0.3 methodology statement, carbon basis,
 residual SE and calibration ratio surfaced → v5.0 live trend layer: weekly
 headline history with per-week Ofgem cap and grid intensity, sparklines and
 what-if overlay → v5.1 window selector re-totals the headline figures
-(12-month sums and cumulative what-if saving).
+(12-month sums and cumulative what-if saving) → v5.2 cooling
+reconciliation diagnostic (year-round HDD+CDD regression, swept base).
 
 *A Causeway Energies public-interest tool — https://causewaygt.com*
