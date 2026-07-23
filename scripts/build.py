@@ -22,6 +22,7 @@ recomputed each run (feed revisions), older weeks are frozen as written.
 
 import datetime as dt
 import json
+import math
 import os
 import sys
 import traceback
@@ -997,6 +998,7 @@ def main():
     # DOES NOT yet replace the ECUK-shaped cooling in the bill/carbon chain -
     # reconciliation over a full summer first.
     cooling_observed = None
+    elec = None   # also read by the reconciliation diagnostic below
     try:
         this_year = dt.date.today().year
         elec = fetch_daily_underlying_demand([this_year - 1, this_year])
@@ -1085,6 +1087,165 @@ def main():
         out["sources"]["electricity"] = {
             "status": "stale" if cooling_observed else "unavailable",
             "last_good": prev.get("sources", {}).get("electricity", {}).get("last_good")}
+
+    # --- cooling reconciliation DIAGNOSTIC: year-round joint regression -------
+    # The observed summer curve (above) and the ECUK cooling+ventilation
+    # anchor differ by an order of magnitude (methodology 4.5). This layer
+    # runs the planned resolution as a DIAGNOSTIC ONLY - it does not drive
+    # the bill or carbon panels. Daily underlying electricity demand over
+    # the full record is regressed jointly on HDD, CDD (base swept - the
+    # data chooses where conditioning starts), weekend, August and
+    # Christmas-period dummies, and a linear trend. beta_c x trailing-12m
+    # CDD bounds annual WEATHER-DRIVEN cooling electricity; the remainder
+    # against the ECUK anchor is weather-flat (ventilation + base-load
+    # cooling + below-base conditioning), which this method cannot split †.
+    cooling_recon = None
+    try:
+        if elec and len(elec) >= 300:
+            # daily mean temperature reconstructed from the dd feed: from
+            # the highest HDD base when heating-side, from CDD(18) when
+            # cooling-side, midpoint in the dead band. (If the dd module
+            # ever exposes raw temps, swap them in here.)
+            cr_bmax = max(dd["hdd"], key=float)
+            cr_temp_by_date = {}
+            for i, d_ in enumerate(dd["dates"]):
+                h = dd["hdd"][cr_bmax][i]
+                c = dd["cdd"][COOL_BASE][i]
+                if h > 0:
+                    t_ = float(cr_bmax) - h
+                elif c > 0:
+                    t_ = float(COOL_BASE) + c
+                else:
+                    t_ = (float(cr_bmax) + float(COOL_BASE)) / 2.0
+                cr_temp_by_date[d_] = t_
+            cr_days_r = sorted(set(elec) & set(cr_temp_by_date))
+            if len(cr_days_r) >= 300:
+                def _ols(cr_y, cr_cols):
+                    """Pure-python OLS: returns coeffs, r2, resid_se, and
+                    coefficient standard errors via normal equations."""
+                    k = len(cr_cols); n = len(cr_y)
+                    XtX = [[sum(cr_cols[a][i] * cr_cols[b][i] for i in range(n))
+                            for b in range(k)] for a in range(k)]
+                    Xty = [sum(cr_cols[a][i] * cr_y[i] for i in range(n))
+                           for a in range(k)]
+                    # solve XtX b = Xty and invert XtX (Gauss-Jordan)
+                    M = [row[:] + [1.0 if a == b else 0.0
+                                   for b in range(k)] + [Xty[a]]
+                         for a, row in enumerate(XtX)]
+                    for col in range(k):
+                        piv = max(range(col, k), key=lambda r_: abs(M[r_][col]))
+                        if abs(M[piv][col]) < 1e-9:
+                            return None
+                        M[col], M[piv] = M[piv], M[col]
+                        pv = M[col][col]
+                        M[col] = [v / pv for v in M[col]]
+                        for r_ in range(k):
+                            if r_ != col and M[r_][col]:
+                                f = M[r_][col]
+                                M[r_] = [v - f * w for v, w
+                                         in zip(M[r_], M[col])]
+                    beta = [M[a][-1] for a in range(k)]
+                    inv = [[M[a][k + b] for b in range(k)] for a in range(k)]
+                    yhat = [sum(beta[a] * cr_cols[a][i] for a in range(k))
+                            for i in range(n)]
+                    rss = sum((cr_y[i] - yhat[i]) ** 2 for i in range(n))
+                    ybar = sum(cr_y) / n
+                    tss = sum((v - ybar) ** 2 for v in cr_y) or 1.0
+                    s2 = rss / max(n - k, 1)
+                    return {"beta": beta, "r2": 1.0 - rss / tss,
+                            "se": math.sqrt(s2),
+                            "bse": [math.sqrt(max(s2 * inv[a][a], 0.0))
+                                    for a in range(k)]}
+                cr_y = [elec[d_] for d_ in cr_days_r]
+                cr_n_r = len(cr_days_r)
+                cr_meta = []
+                for d_ in cr_days_r:
+                    dtd = dt.date.fromisoformat(d_)
+                    cr_meta.append((cr_temp_by_date[d_], dtd.weekday(),
+                                 dtd.month, (dtd.month, dtd.day)))
+                cr_best = None
+                for cr_bh in sorted(float(b) for b in dd["hdd"]):
+                    for cr_bc in (10.0, 12.0, 14.0, 16.0, 18.0):
+                        if cr_bc <= cr_bh:
+                            continue
+                        cr_cols = [
+                            [1.0] * cr_n_r,
+                            [max(0.0, cr_bh - t_) for t_, *_ in cr_meta],
+                            [max(0.0, t_ - cr_bc) for t_, *_ in cr_meta],
+                            [1.0 if wd == 5 else 0.0
+                             for _, wd, *_ in cr_meta],
+                            [1.0 if wd == 6 else 0.0
+                             for _, wd, *_ in cr_meta],
+                            [1.0 if mo == 8 else 0.0
+                             for _, _, mo, _ in cr_meta],
+                            [1.0 if (md >= (12, 20) or md <= (1, 3)) else 0.0
+                             for *_, md in cr_meta],
+                            [i / cr_n_r for i in range(cr_n_r)],
+                        ]
+                        cr_fit = _ols(cr_y, cr_cols)
+                        if cr_fit and (cr_best is None or cr_fit["r2"] > cr_best[0]["r2"]):
+                            cr_best = (cr_fit, cr_bh, cr_bc)
+                if cr_best:
+                    cr_fit, cr_bh, cr_bc = cr_best
+                    cr_beta_c, cr_bse_c = cr_fit["beta"][2], cr_fit["bse"][2]
+                    cr_t_c = cr_beta_c / cr_bse_c if cr_bse_c else 0.0
+                    cr_reliable = cr_beta_c > 0 and cr_t_c > 3 and cr_n_r >= 400
+                    # trailing-12m and current-week CDD at the CHOSEN base
+                    cr_last365 = cr_days_r[-365:]
+                    cr_cdd12m = sum(max(0.0, cr_temp_by_date[d_] - cr_bc)
+                                 for d_ in cr_last365)
+                    cr_wk7 = [d_ for d_ in wk if d_ in cr_temp_by_date]
+                    cr_cddwk = sum(max(0.0, cr_temp_by_date[d_] - cr_bc)
+                                for d_ in cr_wk7)
+                    cr_annual_gwh = cr_beta_c * cr_cdd12m
+                    cr_week_gwh = cr_beta_c * cr_cddwk
+                    cr_ecuk_annual = (ANNUAL_TWH["cooling_vent"]
+                                   * GB_SHARE_OF_UK_GAS_HEAT * 1000.0)
+                    cr_flat_share = (max(0.0, min(1.0, 1.0 - cr_annual_gwh
+                                               / cr_ecuk_annual))
+                                  if cr_ecuk_annual else None)
+                    cooling_recon = {
+                        "status": "diagnostic - not in bill/carbon",
+                        "n_days": cr_n_r,
+                        "window": {"from": cr_days_r[0], "to": cr_days_r[-1]},
+                        "hdd_base_c": cr_bh, "cdd_base_c": cr_bc,
+                        "beta_cool_GWh_per_CDD": round(cr_beta_c, 1),
+                        "beta_cool_t_stat": round(cr_t_c, 1),
+                        "beta_heat_GWh_per_HDD": round(cr_fit["beta"][1], 1),
+                        "r2": round(cr_fit["r2"], 3),
+                        "resid_se_GWh": round(cr_fit["se"], 0),
+                        "reliable": cr_reliable,
+                        "annual_weather_cooling_elec_GWh":
+                            round(cr_annual_gwh, 0),
+                        "week_weather_cooling_elec_GWh": round(cr_week_gwh, 0),
+                        "ecuk_annual_cooling_vent_GWh": round(cr_ecuk_annual, 0),
+                        "implied_weather_flat_share":
+                            round(cr_flat_share, 2) if cr_flat_share is not None
+                            else None,
+                        "summer_centring_slope_GWh_per_CDD":
+                            (cooling_observed or {}).get(
+                                "latent_slope_GWh_per_CDD"),
+                        "note": ("Diagnostic year-round OLS of daily "
+                                 "underlying electricity demand on HDD + "
+                                 "CDD jointly (CDD base swept 10-18 degC, "
+                                 "chosen on fit - the data decides where "
+                                 "conditioning starts), weekend, August "
+                                 "and Christmas dummies, linear trend. "
+                                 "beta_c x trailing-12m CDD bounds annual "
+                                 "weather-driven cooling electricity; the "
+                                 "remainder against the ECUK cooling & "
+                                 "ventilation anchor is weather-flat "
+                                 "(ventilation + base-load cooling + "
+                                 "below-base conditioning), which this "
+                                 "method cannot separate" + EST + ". Not "
+                                 "yet used in the bill or carbon figures."),
+                    }
+    except Exception:
+        traceback.print_exc()
+        cooling_recon = prev.get("cooling_reconciliation")
+    if cooling_recon:
+        out["cooling_reconciliation"] = cooling_recon
+
 
     # --- tier 3: the comfort deficit (latent cooling in unequipped stock) ------
     # The observed curve above only sees buildings that HAVE cooling. This
