@@ -44,6 +44,20 @@
   @media (max-width:400px){.statrow{grid-template-columns:1fr}}
   .stat .fig{font-family:"IBM Plex Mono";font-size:clamp(24px,4vw,38px);font-weight:500}
   .stat .cap{font-size:13px;color:var(--muted);margin-top:2px;max-width:26ch}
+  .trendctl{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:16px;
+            font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.05em;color:var(--muted);flex-wrap:wrap}
+  .trendctl button{font:11px "IBM Plex Mono";letter-spacing:.05em;color:var(--muted);
+            background:none;border:1px solid var(--line);border-radius:3px;padding:2px 8px;cursor:pointer}
+  .trendctl button[aria-pressed="true"]{color:var(--geo);border-color:var(--geo)}
+  .trend{margin-top:8px}
+  .trend svg{display:block;width:100%;height:34px}
+  .trend .tr-actual{fill:none;stroke:var(--paper);stroke-width:1.6;vector-effect:non-scaling-stroke}
+  .trend .tr-whatif{fill:none;stroke:var(--geo);stroke-width:1.2;opacity:.7;vector-effect:non-scaling-stroke}
+  .trend .tr-gap{fill:rgba(58,170,53,.13);stroke:none}
+  .trend .tr-dot{fill:var(--paper)}
+  .tr-delta{font-family:"IBM Plex Mono";font-size:11px;margin-top:3px;color:var(--muted)}
+  .tr-delta b{font-weight:500;color:var(--paper)}
+  .tr-delta b.good{color:var(--geo)} .tr-delta b.bad{color:var(--ember)}
   .whatifrow{border:1px solid var(--geo);border-radius:6px;padding:14px 18px;margin-top:18px;
              background:linear-gradient(180deg,rgba(58,170,53,.07),rgba(58,170,53,.02))}
   .whatifrow .wtitle{font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.06em;color:var(--geo);margin-bottom:8px}
@@ -145,13 +159,25 @@
       shaped by this week's weather. Estimates, not measurements.</p>
     <div class="statrow">
       <div class="stat"><div class="fig" id="st_energy">—</div>
-        <div class="cap">GWh of heating &amp; cooling energy purchased this week</div></div>
+        <div class="cap">GWh of heating &amp; cooling energy purchased this week</div>
+        <div class="trend" data-trend="purchased_GWh" data-good="down" hidden></div></div>
       <div class="stat"><div class="fig" id="st_indig">—</div>
-        <div class="cap">estimated UK-indigenous share of heat &amp; cooling delivered</div></div>
+        <div class="cap">estimated UK-indigenous share of heat &amp; cooling delivered</div>
+        <div class="trend" data-trend="indig_pct" data-good="up" hidden></div></div>
       <div class="stat"><div class="fig" id="st_bill">—</div>
-        <div class="cap" id="st_bill_cap">national energy bill this week</div></div>
+        <div class="cap" id="st_bill_cap">national energy bill this week</div>
+        <div class="trend" data-trend="bill_Mgbp" data-good="down" hidden></div></div>
       <div class="stat"><div class="fig" id="st_carbon">—</div>
-        <div class="cap" id="st_carbon_cap">heating &amp; cooling emissions this week</div></div>
+        <div class="cap" id="st_carbon_cap">heating &amp; cooling emissions this week</div>
+        <div class="trend" data-trend="emissions_kt" data-good="down" hidden></div></div>
+    </div>
+    <div class="trendctl" id="trendctl" hidden>
+      <span>TREND — LIVE WEEKS</span>
+      <button data-win="2">1w</button>
+      <button data-win="5">4w</button>
+      <button data-win="13" aria-pressed="true">12w</button>
+      <button data-win="53">12m</button>
+      <span id="trendspan"></span>
     </div>
     <div class="whatifrow">
       <div class="wtitle" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">WHAT IF
@@ -325,6 +351,7 @@
     <p><b>Northern Ireland.</b> NI is not on the GB network shown here. NI heating
       is estimated annually from subnational consumption statistics scaled by NI
       degree days.</p>
+    <p id="trendpara" style="display:none"><b>Trends.</b> <span id="trendnote">—</span></p>
     <p><b>Indigenous share &amp; 20% what-if.</b> <span id="indignote">—</span></p>
     <p><b>Calibration.</b> <span id="calib">—</span></p>
     <div class="status" id="status"></div>
@@ -345,7 +372,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '4.0.3';
+const SITE_VERSION = '5.0.0';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
@@ -819,6 +846,88 @@ fetch('data.json').then(r=>r.json()).then(d=>{
       (c.within_10pct ? 'Within our ±10% publication gate.'
                       : 'OUTSIDE the ±10% gate — split under review.');
   }
+  // --- trend layer: weekly hero-number history (live weeks only) ------------
+  (function(){
+    const hist = Array.isArray(d.history)
+      ? d.history.filter(e => e && e.week_ending).slice()
+                 .sort((a,b) => a.week_ending < b.week_ending ? -1 : 1)
+      : [];
+    if(hist.length < 2) return;
+    const els = [...document.querySelectorAll('.trend')];
+    const ctl = document.getElementById('trendctl');
+    ctl.hidden = false;
+    document.getElementById('trendspan').textContent =
+      '· ' + hist.length + ' wks on record · what-if in green';
+    if(d.history_note){
+      ctl.title = d.history_note;
+      const tn = document.getElementById('trendnote');
+      tn.textContent = d.history_note +
+        (d.gas_window ? ' Live gas window: ' + d.gas_window.oldest +
+                        ' → ' + d.gas_window.newest + '.' : '');
+      document.getElementById('trendpara').style.display = '';
+    }
+    const dfmt = s => new Date(s + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+    function draw(win){
+      els.forEach(el => {
+        const key = el.dataset.trend, goodDir = el.dataset.good;
+        const rows = hist.slice(-win).filter(e => e[key] != null);
+        if(rows.length < 2){ el.hidden = true; return; }
+        el.hidden = false;
+        const W = Math.max(el.clientWidth || 0, 120), H = 34, pad = 3;
+        const t0 = Date.parse(rows[0].week_ending),
+              t1 = Date.parse(rows[rows.length-1].week_ending);
+        const X = e => t1 === t0 ? W/2
+          : pad + (W - 2*pad) * (Date.parse(e.week_ending) - t0) / (t1 - t0);
+        const vs = rows.map(e => e[key]);
+        const wfAll = rows.map(e => (e.whatif || {})[key]);
+        const wf = wfAll.every(v => v != null) ? wfAll : null;
+        const span = vs.concat(wf || []);
+        let lo = Math.min(...span), hi = Math.max(...span);
+        if(hi === lo){ hi += 1; lo -= 1; }
+        const Y = v => pad + (H - 2*pad) * (1 - (v - lo) / (hi - lo));
+        const P = arr => rows.map((e,i) => X(e).toFixed(1) + ',' +
+                                           Y(arr[i]).toFixed(1)).join(' ');
+        let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">';
+        if(wf){
+          svg += '<polygon class="tr-gap" points="' + P(vs) + ' ' +
+                 P(wf).split(' ').reverse().join(' ') + '"/>' +
+                 '<polyline class="tr-whatif" points="' + P(wf) + '"/>';
+        }
+        svg += '<polyline class="tr-actual" points="' + P(vs) + '"/>' +
+               '<circle class="tr-dot" cx="' + X(rows[rows.length-1]).toFixed(1) +
+               '" cy="' + Y(vs[vs.length-1]).toFixed(1) + '" r="2"/></svg>';
+        const a = vs[0], b = vs[vs.length-1], dir = b > a ? 1 : (b < a ? -1 : 0);
+        const txt = key === 'indig_pct'
+          ? (b - a > 0 ? '+' : '') + (b - a).toFixed(0) + ' pp'
+          : (a ? ((b - a) / a > 0 ? '+' : '') +
+                 (100 * (b - a) / a).toFixed(0) + '%' : '—');
+        const cls = dir === 0 ? '' :
+          ((dir > 0) === (goodDir === 'up') ? 'good' : 'bad');
+        const arrow = dir > 0 ? '\u25b2' : (dir < 0 ? '\u25bc' : '\u25ac');
+        el.innerHTML = svg +
+          '<div class="tr-delta">' + arrow + ' <b class="' + cls + '">' + txt +
+          '</b> vs ' + dfmt(rows[0].week_ending) + '</div>';
+        el.title = rows.length + ' live weeks to w/e ' +
+                   rows[rows.length-1].week_ending;
+      });
+    }
+    let win = 13;
+    ctl.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        win = +b.dataset.win;
+        ctl.querySelectorAll('button').forEach(x =>
+          x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+        draw(win);
+      });
+    });
+    let rt;
+    window.addEventListener('resize', () => {
+      clearTimeout(rt); rt = setTimeout(() => draw(win), 150);
+    });
+    draw(win);
+  })();
+
   const st=document.getElementById('status');
   Object.entries(d.sources||{}).forEach(([k,v])=>{
     st.insertAdjacentHTML('beforeend',
