@@ -1240,6 +1240,43 @@ def main():
                                  "method cannot separate" + EST + ". Not "
                                  "yet used in the bill or carbon figures."),
                     }
+                    # --- stability log: one entry per run-date, so the
+                    # switchover gate (base stable +-1C over 60d, slope
+                    # t>5, estimator agreement) is measurable, not
+                    # eyeballed. Idempotent by date; capped; carried
+                    # forward with the rest of the dict on error.
+                    prev_log = ((prev.get("cooling_reconciliation") or {})
+                                .get("stability_log") or [])
+                    log = {e["date"]: e for e in prev_log
+                           if isinstance(e, dict) and e.get("date")}
+                    log[dt.date.today().isoformat()] = {
+                        "date": dt.date.today().isoformat(),
+                        "cdd_base_c": cr_bc,
+                        "beta_cool": round(cr_beta_c, 2),
+                        "t_stat": round(cr_t_c, 1),
+                        "r2": round(cr_fit["r2"], 3),
+                        "n_days": cr_n_r,
+                        "centring_slope": (cooling_observed or {}).get(
+                            "latent_slope_GWh_per_CDD"),
+                    }
+                    entries = [log[k] for k in sorted(log)][-120:]
+                    cooling_recon["stability_log"] = entries
+                    cutoff = (dt.date.today()
+                              - dt.timedelta(days=60)).isoformat()
+                    recent = [e for e in entries if e["date"] >= cutoff]
+                    bases = [e["cdd_base_c"] for e in recent]
+                    slopes = [e["beta_cool"] for e in recent]
+                    cooling_recon["stability"] = {
+                        "runs_60d": len(recent),
+                        "base_range_60d": [min(bases), max(bases)],
+                        "slope_range_60d": [min(slopes), max(slopes)],
+                        "base_stable_pm1c": (max(bases) - min(bases)) <= 2.0,
+                        "gate_note": ("Switchover gate: base stable within "
+                                      "+-1C over 60d of runs, slope t>5, "
+                                      "year-round and centring slopes "
+                                      "within ~1.5x, holdout error "
+                                      "comparable to in-sample."),
+                    }
     except Exception:
         traceback.print_exc()
         cooling_recon = prev.get("cooling_reconciliation")
