@@ -377,7 +377,7 @@
 //   x: major - new data source or new panel
 //   y: minor - update to an existing data source or anchor (e.g. price cap, ECUK)
 //   z: patch - wording or formatting change
-const SITE_VERSION = '5.2.0';
+const SITE_VERSION = '5.2.1';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('siteversion');
   if(el) el.textContent = 'v' + SITE_VERSION + ' \u00b7 ';
@@ -970,10 +970,7 @@ fetch('data.json').then(r=>r.json()).then(d=>{
       setHero(win);
       els.forEach(el => {
         const key = el.dataset.trend, goodDir = el.dataset.good;
-        // at "this week" the sparkline shows the full record as context;
-        // a chosen window zooms both the line and the totals to its span
-        const spanN = win === 2 ? 53 : win;
-        const rows = hist.slice(-spanN).filter(e => e[key] != null);
+        const rows = hist.slice(-win).filter(e => e[key] != null);
         if(rows.length < 2){ el.hidden = true; return; }
         el.hidden = false;
         const W = Math.max(el.clientWidth || 0, 120), H = 34, pad = 3;
@@ -999,9 +996,7 @@ fetch('data.json').then(r=>r.json()).then(d=>{
         svg += '<polyline class="tr-actual" points="' + P(vs) + '"/>' +
                '<circle class="tr-dot" cx="' + X(rows[rows.length-1]).toFixed(1) +
                '" cy="' + Y(vs[vs.length-1]).toFixed(1) + '" r="2"/></svg>';
-        const drows = hist.slice(-win).filter(e => e[key] != null);
-        const dvs = drows.length >= 2 ? drows.map(e => e[key]) : vs;
-        const a = dvs[0], b = dvs[dvs.length-1],
+        const a = vs[0], b = vs[vs.length-1],
               dir = b > a ? 1 : (b < a ? -1 : 0);
         const txt = key === 'indig_pct'
           ? (b - a > 0 ? '+' : '') + (b - a).toFixed(0) + ' pp'
@@ -1010,10 +1005,9 @@ fetch('data.json').then(r=>r.json()).then(d=>{
         const cls = dir === 0 ? '' :
           ((dir > 0) === (goodDir === 'up') ? 'good' : 'bad');
         const arrow = dir > 0 ? '\u25b2' : (dir < 0 ? '\u25bc' : '\u25ac');
-        const dfrom = (drows.length >= 2 ? drows : rows)[0].week_ending;
         el.innerHTML = svg +
           '<div class="tr-delta">' + arrow + ' <b class="' + cls + '">' + txt +
-          '</b> vs ' + dfmt(dfrom) + '</div>';
+          '</b> vs ' + dfmt(rows[0].week_ending) + '</div>';
         el.title = rows.length + ' live weeks to w/e ' +
                    rows[rows.length-1].week_ending;
       });
